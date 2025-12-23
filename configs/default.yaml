@@ -1,0 +1,19 @@
+# configs/configs.yaml
+seed: 22
+device: cuda
+cudnn_deterministic: true
+cudnn_benchmark: false
+checkpoints: '/home/jiangchengxuan/PycharmProjects/RL-Autovehicles-gymnasium/checkpoints'
+log_path: '/home/jiangchengxuan/PycharmProjects/RL-Autovehicles-gymnasium/logs'
+
+model:
+  name: "MlpNet"
+  model_args:
+    num_classes: 10
+    in_channels: 1
+
+train:
+  batch_size: 1
+  buffer_size: 1000
+  epochs: 100
+  max_step: 100
