@@ -6,9 +6,9 @@ class Plotter:
         """
         初始化 Plotter 对象。
 
-        :param history: dict，包含训练历史数据，默认为None。期望的键包括'episode', 'total_reward', 'steps', 'avg_loss'。
+        :param history: dict，包含训练历史数据，默认为None。期望的键包括'episode', 'total_reward', 'avg_return', 'avg_loss'。
         """
-        self.history = history if history is not None else {'episode': [], 'total_reward': [], 'steps': [],
+        self.history = history if history is not None else {'episode': [], 'total_reward': [], 'avg_return': [],
                                                             'avg_loss': []}
 
     def load_history(self, history):
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     training_history = {
         'episode': [1, 2, 3, 4, 5],
         'total_reward': [100, 150, 200, 250, 300],
-        'steps': [50, 60, 70, 80, 90],
+        'avg_return': [50, 60, 70, 80, 90],
         'avg_loss': [0.3, 0.25, 0.2, 0.15, 0.1]
     }
 

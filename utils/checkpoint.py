@@ -1,6 +1,7 @@
 # utils/checkpoint.py
 import os
 import torch
+import numpy as np
 from datetime import datetime
 from utils import get_logger
 
@@ -57,10 +58,10 @@ def save_checkpoint(
     checkpoint = {
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict() if optimizer else None,
-        'epoch': epoch,
     }
     if extra_info:
-        checkpoint.update(extra_info)
+        clean_info = to_serializable(extra_info)
+        checkpoint.update(clean_info)
 
     # 5. 保存
     torch.save(checkpoint, file_path)
@@ -133,3 +134,20 @@ def generate_model_filename(
 
     filename = f"{base_name}.{extension}"
     return filename
+
+
+# 在 save_checkpoint 中，对 history 或 metrics 做清洗
+def to_serializable(obj):
+    """递归将 numpy 标量转为 Python 原生类型"""
+    if isinstance(obj, dict):
+        return {k: to_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return type(obj)(to_serializable(x) for x in obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()  # 或保留为 tensor（如果需要）
+    else:
+        return obj
