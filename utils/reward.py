@@ -8,9 +8,9 @@ def compute_reward(env):
     lateral_dist = get_lateral_distance_to_center(ego.position[1], lane_index)
     r_center = -0.5 * (lateral_dist ** 2) # 二次惩罚
 
-    # 速度奖励（鼓励高效行驶）
+    # 速度奖励
     speed = ego.speed
-    r_speed = 0.1 * speed  # 或使用 highway-env 自带的 speed reward
+    r_speed = 0.1 * speed
 
     # 碰撞惩罚
     r_collision = -10.0 if ego.crashed else 0.0

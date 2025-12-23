@@ -17,8 +17,8 @@ rollout_steps = 20
 action_dim = 2
 
 # 使用策略梯度法进行训练
-agent = AgentHighWayContinuous(state_dim=7*10,action_dim=action_dim, value_output_dim=1,policy_lr=0.0001,value_lr=0.001)
-
+agent = AgentHighWayContinuous(state_dim=7*10,action_dim=action_dim,env=env,lr=0.0001)
+agent.model.train()
 # 初始化参数
 max_avg_reward = float("-inf")
 train_step = 0
@@ -58,7 +58,7 @@ for episode in range(max_episode):
         actions_taken.append(action)
         if len(agent.memory) == rollout_steps or done:
            indicator_dictionary = agent.update()
-           loss += indicator_dictionary['policy_loss']
+           loss += indicator_dictionary['total_loss']
            returns += indicator_dictionary['avg_return']
            update_count+=1
 
@@ -95,20 +95,11 @@ metrics = {'max_avg_reward':max_avg_reward,'train_step':train_step}
 
 # 存储历史数据
 extra_info = {'history':history}
-checkpoint.save_checkpoint(model= agent.policy_model,
-                           model_name='mlp-policy',
-                           env_name='highway-v0-ca',
+checkpoint.save_checkpoint(model= agent.model,
+                           model_name='a2c-mlp',
+                           env_name='highway-v0',
                            file_dir=config.checkpoints,
                            metrics = metrics,
-                           optimizer=agent.policy_optimizer,
-                           epoch = max_episode,
-                           extra_info = extra_info)
-
-checkpoint.save_checkpoint(model= agent.value_model,
-                           model_name='mlp-value',
-                           env_name='highway-v0-ca',
-                           file_dir=config.checkpoints,
-                           metrics = metrics,
-                           optimizer=agent.value_optimizer,
+                           optimizer=agent.optimizer,
                            epoch = max_episode,
                            extra_info = extra_info)
