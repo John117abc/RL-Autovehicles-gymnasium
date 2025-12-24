@@ -2,8 +2,8 @@ import torch
 import numpy as np
 from torch import nn
 from torch.distributions import Normal
-from models import ActorCritic
-from utils import setup_code_environment,load_config,denormalize_action,normalize_action
+from models import ActorNet,CriticNet
+from utils import setup_code_environment,load_config,denormalize_action,normalize_action,get_three_lane_paths
 # # 设备选择
 # device = (
 #     "cuda" if torch.cuda.is_available()
@@ -12,16 +12,17 @@ from utils import setup_code_environment,load_config,denormalize_action,normaliz
 # )
 # print(f"使用设备: {device}")
 
-class AgentHighWayContinuous:
+class AgentOcp:
     def __init__(self,state_dim,env,
-                 hidden_dim = 256,action_dim = 5,lr = 0.01):
+                 hidden_dim = 256,action_dim = 2,actor_lr = 0.9,critic_lr = 0.999):
         """
         智能体
         :param state_dim: 状态空间维度
         :param env: 环境
         :param hidden_dim: 隐藏层维度
         :param action_dim: 动作维度
-        :param lr: 学习率
+        :param actor_lr: 策略学习率
+        :param critic_lr: 评论家学习率
         """
         self.config = load_config('../configs/default.yaml')
         # 获取环境动作信息
@@ -32,7 +33,6 @@ class AgentHighWayContinuous:
         self.state_dim = state_dim
         self.hidden_dim = hidden_dim
         self.action_dim = action_dim
-        self.lr = lr
 
         # 初始化函数
         self._setup()
@@ -40,11 +40,18 @@ class AgentHighWayContinuous:
         self.device = self.config.device
 
         # 初始化神经网络
-        self.model = ActorCritic(self.state_dim,self.hidden_dim,self.action_dim).to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(),lr = self.lr)
+        self.actor_model = ActorNet(self.state_dim,self.hidden_dim,2 * self.action_dim).to(self.device)
+        self.actor_optimizer = torch.optim.Adam(self.actor_model.parameters(),lr = actor_lr)
+
+        self.critic_model = CriticNet(self.state_dim,self.hidden_dim).to(self.device)
+        self.critic_optimizer = torch.optim.Adam(self.critic_model.parameters(),lr=critic_lr)
 
         self.gamma = 0.99
         self.memory = []
+
+        # 惩罚放大系数
+        self.penalty = 1.0
+        self.penalty_amplifier = 1.1
 
     def _setup(self):
         setup_code_environment(self.config)
@@ -90,11 +97,16 @@ class AgentHighWayContinuous:
         raw_action = dist.sample()
         # 动作映射到tan
         action = torch.tanh(raw_action)
+        # 减去 tanh 的 Jacobian 行列式对数（每个维度独立）
+        log_prob = dist.log_prob(raw_action)
+        log_prob -= torch.log(1 - action.pow(2) + 1e-6)     # 变量变换公式
+        log_prob = log_prob.sum(dim=-1, keepdim=True)
 
         # 把action映射到真实的转向角和加速度上
         action = denormalize_action(action,self.env_acceleration_range,self.env_steering_range)
         return (
             action.cpu().detach().numpy().flatten(),
+            log_prob.cpu().detach().numpy().flatten(),
             value.cpu().detach().numpy().flatten()
         )
 
@@ -155,6 +167,14 @@ class AgentHighWayContinuous:
             'total_loss': (policy_loss + value_loss).item(),
             'avg_return': returns.mean().item()
         }
+
+    def static_road_plan(self,env):
+        """
+        静态路径规划
+        :param env: 环境
+        :return: 规划结果，其中规划的是当前车道和旁边两车道的点状信息
+        """
+        return get_three_lane_paths(env)
 
     def clean_mem(self):
         self.memory.clear()

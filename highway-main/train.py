@@ -2,8 +2,7 @@ import numpy as np
 
 from agents import AgentHighWayContinuous
 from custom_env import get_highway_discrete_env
-from utils import normalize_Kinematics_obs
-from utils import checkpoint,load_config,compute_reward
+from utils import checkpoint,load_config,get_kinematics_state
 
 # 读取配置文件
 config = load_config('../configs/default.yaml')
@@ -13,7 +12,6 @@ max_step = config.train.max_step    # 每回合最大步数
 # 初始化环境
 env = get_highway_discrete_env()
 episode_rewards = []
-rollout_steps = 20
 action_dim = 2
 
 # 使用策略梯度法进行训练
@@ -35,7 +33,9 @@ history = {
 # 开始训练
 for episode in range(max_episode):
     obs, _ = env.reset()
-    state = normalize_Kinematics_obs(obs)
+    # 静态路径信息
+    state = get_kinematics_state(obs)
+
     done = False
     total_reward = 0
     step_count = 0
@@ -43,33 +43,13 @@ for episode in range(max_episode):
     update_count = 0
     loss = 0
     returns = 0
+    # 每一个回合的训练
     while not done and step_count < max_step:  # 加个上限防死循环
         env.render()
-        action, log_prob, value = agent.select_action(state)
+        action, value = agent.select_action(state)
         next_state, reward, terminated, truncated, info = env.step(action)
+        # if len(agent.memory) == rollout_steps or done:
 
-        # 计算奖励
-        reward += compute_reward(env)
-
-        done = terminated or truncated
-
-        agent.store_transition(state, action, reward, log_prob, value, done)
-        state = normalize_Kinematics_obs(next_state)
-        actions_taken.append(action)
-        if len(agent.memory) == rollout_steps or done:
-           indicator_dictionary = agent.update()
-           loss += indicator_dictionary['total_loss']
-           returns += indicator_dictionary['avg_return']
-           update_count+=1
-
-        total_reward += reward
-        step_count += 1
-
-    # 记录历史值
-    history['episode'].append(episode)
-    history['total_reward'].append(total_reward)
-    history['avg_loss'].append(loss/update_count)
-    history['avg_return'].append(returns/update_count)
 
     # 打印终止原因
     if done:

@@ -16,7 +16,7 @@ action_dim = 2
 agent = AgentHighWayContinuous(state_dim=7*10,action_dim=action_dim,env=env,lr=0.0001)
 # 读取参数
 checkpoint_info = load_checkpoint(agent.model,
-                                  f'{checkpoint_dir}/20251223/a2c-mlp_highway-v0_214835_max_avg_reward=32.9_train_step=20.pth',
+                                  f'{checkpoint_dir}/20251224/a2c-mlp_highway-v0_120412_max_avg_reward=-483.1_train_step=18456.pth',
                                   agent.optimizer,
                                   agent.device)
 

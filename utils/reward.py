@@ -2,7 +2,7 @@ import math
 
 
 def compute_reward(env):
-    # 1. 车道居中奖励（主项）
+    # 车道居中奖励
     ego = env.unwrapped.vehicle
     lane_index = ego.lane_index[2]  # 当前车道索引
     lateral_dist = get_lateral_distance_to_center(ego.position[1], lane_index)
@@ -13,7 +13,7 @@ def compute_reward(env):
     r_speed = 0.1 * speed
 
     # 碰撞惩罚
-    r_collision = -10.0 if ego.crashed else 0.0
+    r_collision = -1000.0 if ego.crashed else 0.0
 
     # 车道变更惩罚
     r_lane_change = -0.1 if ego.action['steering'] > 0.3 else 0.0
