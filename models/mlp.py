@@ -44,7 +44,7 @@ class ActorNet(nn.Module):
         x = F.elu(self.l1(x))
         x = F.elu(self.l2(x))
         x = self.l3(x)
-        return x
+        return x[:,:2],x[:,2:]
 
 class CriticNet(nn.Module):
     """

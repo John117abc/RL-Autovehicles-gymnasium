@@ -17,7 +17,7 @@
         "reward_speed_range": [10, 50],  # [m/s] 从这个范围到最高速度的奖励呈线性关系 [0, HighwayEnv.HIGH_SPEED_REWARD].
         "simulation_frequency": 15,  # [Hz] 模拟频率
         "policy_frequency": 10,  # [Hz]  策略频率
-        "other_vehicles_type": "highway_env.vehicle.behavior.AggressiveVehicle",   # 其他车辆类型
+        "other_vehicles_type": "highway_env.vehicle.behavior.IDMVehicle",   # 其他车辆类型
         "other_vehicles_behavior": {
           "random_lane_change": 0.15,
           "aggressiveness": 0.8  # 增加攻击性

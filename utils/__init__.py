@@ -6,7 +6,14 @@ from .env import setup_code_environment
 from .common import normalize_Kinematics_obs
 from .reward import compute_reward
 from .draw import Plotter
-from .agent_utils import get_three_lane_paths,denormalize_action,normalize_action,get_kinematics_ego,get_kinematics_surround,get_kinematics_state
+from .agent_utils import (get_three_lane_paths,
+                          denormalize_action,
+                          normalize_action,
+                          get_kinematics_ego,
+                          get_kinematics_surround,
+                          get_kinematics_state,
+                          get_complete_lane_references,
+                          calculate_state_error)
 __all__ = ['get_logger',
            'save_checkpoint',
            'load_config',
@@ -21,4 +28,6 @@ __all__ = ['get_logger',
            'normalize_action',
            'get_kinematics_ego',
            'get_kinematics_surround',
-           'get_kinematics_state']
+           'get_kinematics_state',
+           'get_complete_lane_references',
+           'calculate_state_error']
