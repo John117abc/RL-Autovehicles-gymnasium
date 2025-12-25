@@ -16,7 +16,7 @@ max_step = config.train.max_step    # 每回合最大步数
 batch_size = config.train.batch_size    # 每批次训练大小
 buffer_size = config.train.buffer_size  # 经验回放缓冲区大小
 min_start_train = config.train.min_start_train # 最小训练启动样本量
-
+actor_interval = config.train.actor_interval    # 对actor的更新，每x次更新一次
 
 # 初始化环境
 logger.info('开始初始化环境')
@@ -60,8 +60,6 @@ for episode in range(max_episode):
     step_count = 0
     actions_taken = []
     update_count = 0
-    loss = 0
-    returns = 0
     episode_buffer = []
     # 每一个回合的训练
     while not done and step_count < max_step:  # 加个上限防死循环
@@ -78,11 +76,15 @@ for episode in range(max_episode):
         state = get_kinematics_state(next_state,env)
         episode_buffer.append(state_info, action, reward, value, state,done, info)
 
+    update_count += 1
     # 存储经验
     buffer_manage.add_trajectory(episode_buffer)
     # 如果经验缓冲区的数据够训练，则开始采样训练
     if buffer_manage.size_trajectory() >= min_start_train:
-
+        agent.update_critic(buffer_manage)
+        if update_count % actor_interval ==0:
+            # 进行actor更新
+            agent.update_critic(buffer_manage)
 
     # 打印终止原因
     if done:

@@ -18,3 +18,4 @@ train:
   epochs: 1000
   max_step: 1000
   min_start_train: 10  # 最小训练启动样本量
+  actor_interval: 100

@@ -59,6 +59,7 @@ class AgentOcp:
         # 正定矩阵
         self.Q_matrix = [0.04, 0.04, 0.01, 0.1]
         self.R_matrix = [0.1, 0.005]
+        self.M_matrix = [1,1,0,0,0,0]
 
 
     def _setup(self):
@@ -93,10 +94,10 @@ class AgentOcp:
             value.cpu().detach().numpy().flatten()
         )
 
-    def calculate_j_critic(self, x_refs, xs, value_t, actions):
+    def calculate_j_critic(self, x_others, xs, value_t, actions):
         """
         计算Jcritic   x_refs,xs,actions的len()必须相等
-        :param x_refs: 周车状态信息
+        :param x_others: 周车状态信息
         :param xs: 自车信息
         :param value_t: t时刻critic网络计算的value
         :param actions: 每个时刻的动作
@@ -105,7 +106,7 @@ class AgentOcp:
         length = len(actions)
         total_cost = 0.0
         for i in range(length):
-            dx = x_refs[i] - xs[i]
+            dx = x_others[i] - xs[i]
             cost_state = dx.T @ self.Q_matrix @ dx
             cost_action = actions[i].T @ self.R_matrix @ actions[i]
 
@@ -114,23 +115,29 @@ class AgentOcp:
 
         return total_cost
 
-    def calculate_j_p(self, x_refs, xs, value_t, actions):
+    def calculate_j_p(self, x_others, xs,x_refs, actions):
 
         length = len(actions)
         total_l = 0.0
         for i in range(length):
-            dx = x_refs[i] - xs[i]
+            dx = x_others[i] - xs[i]
             cost_state = dx.T @ self.Q_matrix @ dx
             cost_action = actions[i].T @ self.R_matrix @ actions[i]
 
             total_l += cost_state + cost_action
 
+        total_ge = 0.0
+        for i in range(length):
+            # 因为目前环境没有红绿灯约束，所以少一些约束
+            ge_other = self.penalty * max(-((xs[i] - x_others[i]).T @ self.M_matrix @ (xs[i] - x_others[i])),0)
+            ge_ref = self.penalty * max(-((xs[i] - x_refs[i]).T @ self.M_matrix @ (xs[i] - x_refs[i])),0)
+            # 目前没有红绿灯约束
+            total_l += (ge_other + ge_ref)**2
 
-
-
+        return  total_l + total_ge
 
     # 使用A2C算法更新策略
-    def update(self,buffer:IDCBuffer):
+    def update_critic(self,buffer:IDCBuffer):
         """
         使用收集到的整条轨迹更新共享主干的 Actor-Critic 网络（on-policy A2C）。
         假设动作已通过 tanh + 线性缩放映射到物理空间：
@@ -143,13 +150,14 @@ class AgentOcp:
         # 从缓冲区采样
         states, actions, rewards, values, next_states, dones, infos = zip(*buffer.sample_batch(self.batch_size))
         # 计算J_critic
-        j_critic = self.calculate_j_critic(states['state_ref'],states['state_ego'],values[0],actions)
+        j_critic = self.calculate_j_critic(states['state_other'],states['state_ego'],values[0],actions)
         j_critic = torch.from_numpy(j_critic).to(self.device).float()
         self.critic_model.zero_grad()
         j_critic.backward()
         self.policy_optimizer.step()
 
         # 计算J_p
+        j_p = self.calculate_j_p(states['state_other'], states['state_ego'],states['state_ref'], actions)
 
 
         return {
