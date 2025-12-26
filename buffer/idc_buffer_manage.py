@@ -48,10 +48,11 @@ class IDCBuffer:
             batch = trajectory[start_idx:start_idx + batch_size]
 
             # 转换为批次格式
-            states, actions, rewards, next_states, dones = zip(*batch)
-            return (np.array(states), np.array(actions),
-                    np.array(rewards), np.array(next_states),
-                    np.array(dones), traj_id)
+            states, actions, rewards, values, next_states, dones, infos = zip(*batch)
+            state_infos = [exp[0] for exp in batch]
+            return (state_infos, np.array(actions),
+                    np.array(rewards), np.array(values), np.array(next_states),
+                    np.array(dones),np.array(infos), traj_id)
 
     def sample_full_trajectory(self):
         """随机采样一条完整轨迹"""
@@ -63,7 +64,7 @@ class IDCBuffer:
             traj_id = random.randint(0, len(self.trajectories) - 1)
             trajectory = self.trajectories[traj_id]
 
-            states, actions, rewards, next_states, dones = zip(*trajectory)
+            states, actions, rewards, values, next_states, dones, infos = zip(*trajectory)
             return (np.array(states), np.array(actions),
                     np.array(rewards), np.array(next_states),
                     np.array(dones), traj_id)

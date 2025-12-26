@@ -1,5 +1,6 @@
 import numpy as np
 
+from collections import namedtuple
 from agents import AgentOcp
 from custom_env import get_highway_discrete_env
 from utils import checkpoint,load_config,get_kinematics_state,get_logger
@@ -50,6 +51,7 @@ history = {
     'avg_return':[]
 }
 
+StateInfo = namedtuple('StateInfo', ['state_ego', 'state_other', 'state_ref'])
 # 开始训练
 for episode in range(max_episode):
     obs, _ = env.reset()
@@ -66,25 +68,26 @@ for episode in range(max_episode):
         env.render()
         action, value = agent.select_action(state['state'])
         next_state, reward, terminated, truncated, info = env.step(action)
-        state_info = {
-            'state_ego':state['state_ego'],
-            'state_other':state['state_other'],
-            'state_ref':state['state_ref']
-        }
-
+        state_info = StateInfo(
+            state['state_ego'],
+            state['state_other'],
+            state['state_ref']
+        )
         # 暂存单条轨迹储经验
         state = get_kinematics_state(next_state,env)
-        episode_buffer.append(state_info, action, reward, value, state,done, info)
+        experience = state_info, action, reward, value, state,done, info
+        episode_buffer.append(experience)
+        step_count+=1
 
-    update_count += 1
+    logger.info(f'第{episode+1}次回合结束')
     # 存储经验
     buffer_manage.add_trajectory(episode_buffer)
     # 如果经验缓冲区的数据够训练，则开始采样训练
     if buffer_manage.size_trajectory() >= min_start_train:
         agent.update_critic(buffer_manage)
-        if update_count % actor_interval ==0:
+        if episode % actor_interval ==0:
             # 进行actor更新
-            agent.update_critic(buffer_manage)
+            agent.update_actor(buffer_manage)
 
     # 打印终止原因
     if done:

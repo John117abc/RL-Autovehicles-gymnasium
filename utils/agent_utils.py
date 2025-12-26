@@ -56,9 +56,6 @@ def get_three_lane_paths(env, horizon=50, longitudinal_step=5.0):
     return paths  # [left_path, current_path, right_path]
 
 
-# def get_ego_state(obs):
-
-
 def calculate_state_error(obs, reference):
     """
     计算状态误差向量 s^ref = [delta_p, delta_phi, delta_v]
@@ -512,29 +509,47 @@ def normalize_action(action_real, acceleration_range, steering_range):
     return torch.stack([acceleration_norm, steering_norm], dim=-1)
 
 
-def get_kinematics_ego(obs):
+def get_kinematics_ego(obs, out=None):
     """获取kinematics观察模式下自车的状态（x坐标，y坐标，纵向速度，横向速度，航向角，偏航率"""
-    ego_state = obs[0]
-    ego_state_x = ego_state[1]
-    ego_state_y = ego_state[2]
-    ego_state_vy = ego_state[4]
-    ego_state_vx = ego_state[3]
-    ego_state_heading = ego_state[5]
-    ego_state_yaw_rate = ego_state[8]
+    """
+    获取 kinematics 观察模式下自车的状态：
+    [x, y, vy, vx, heading, yaw_rate]
 
-    return [ego_state_x,ego_state_y,ego_state_vy,ego_state_vx,ego_state_heading,ego_state_yaw_rate]
+    Parameters:
+        obs (np.ndarray): 形状为 (N, D) 的观测数组，obs[0] 为自车状态
+        out (np.ndarray, optional): 预分配的输出数组，形状应为 (6,)
 
-def get_kinematics_surround(obs):
+    Returns:
+        np.ndarray: 形状为 (6,) 的自车状态数组
+    """
+    ego = obs[0]
+
+    if out is None:
+        out = np.empty(6, dtype=ego.dtype)
+
+    # 按顺序填充：x, y, vy, vx, heading, yaw_rate
+    out[0] = ego[1]  # x
+    out[1] = ego[2]  # y
+    out[2] = ego[4]  # vy
+    out[3] = ego[3]  # vx
+    out[4] = ego[5]  # heading
+    out[5] = ego[8]  # yaw_rate
+
+    return out
+
+def get_kinematics_surround(obs, out=None):
     """获取kinematics观察模式下周车的状态（x坐标，y坐标，纵向速度，横向速度，航向角，偏航率"""
-    surround_state = obs[1:,:]
-    surround_state_x = surround_state[:,1]
-    surround_state_y = surround_state[:,2]
-    surround_state_vy = surround_state[:,4]
-    surround_state_vx = np.zeros_like(surround_state[:,3])
-    surround_state_heading = surround_state[:,5]
-    surround_state_yaw_rate = np.zeros_like(surround_state[:,8])
-
-    return [surround_state_x,surround_state_y,surround_state_vy,surround_state_vx,surround_state_heading,surround_state_yaw_rate]
+    s = obs[1:]
+    M = s.shape[0]
+    if out is None:
+        out = np.empty((M, 6), dtype=s.dtype)
+    out[:, 0] = s[:, 1]      # x
+    out[:, 1] = s[:, 2]      # y
+    out[:, 2] = s[:, 4]      # vy
+    out[:, 3] = 0            # vx
+    out[:, 4] = s[:, 5]      # heading
+    out[:, 5] = 0            # yaw_rate
+    return out
 
 def get_kinematics_state(obs,env):
     """获取kinematics观察模式下的按照论文说的，道路信息，自车信息，周车信息集合 state"""
@@ -542,7 +557,7 @@ def get_kinematics_state(obs,env):
     state_ego = get_kinematics_ego(obs)
     # 周车信息
     state_other = get_kinematics_surround(obs)
-    # 参考信息
+    # 参考信息,1是自车道
     state_ref = calculate_state_error(obs,get_complete_lane_references(env)[1])
     return {'state':np.concatenate([state_ego, list(itertools.chain.from_iterable(state_other)) , state_ref]),
             'state_ego':state_ego,
