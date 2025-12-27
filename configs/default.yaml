@@ -3,8 +3,8 @@ seed: 22
 device: cuda
 cudnn_deterministic: true
 cudnn_benchmark: false
-checkpoints: '/home/jiangchengxuan/PycharmProjects/RL-Autovehicles-gymnasium/checkpoints'
-log_path: '/home/jiangchengxuan/PycharmProjects/RL-Autovehicles-gymnasium/logs'
+checkpoints: '/checkpoints'
+log_path: '/logs'
 
 model:
   name: "MlpNet"

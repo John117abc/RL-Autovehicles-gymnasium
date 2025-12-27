@@ -1,4 +1,4 @@
-import torch
+from pathlib import Path
 
 def normalize_Kinematics_obs(obs):
     """
@@ -14,3 +14,10 @@ def normalize_Kinematics_obs(obs):
     obs[:, 4] /= 20.0   # vy
     # presence, cos_h, sin_h 已经归一化了
     return obs.flatten()
+
+
+def get_project_root() -> Path:
+
+    """返回项目根目录"""
+
+    return Path(__file__).parent.parent.resolve()

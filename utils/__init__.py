@@ -3,7 +3,7 @@ from .logger import get_logger
 from .checkpoint import save_checkpoint,load_checkpoint
 from .config import load_config,load_config_json
 from .env import setup_code_environment
-from .common import normalize_Kinematics_obs
+from .common import normalize_Kinematics_obs,get_project_root
 from .reward import compute_reward
 from .draw import Plotter
 from .agent_utils import (get_three_lane_paths,
@@ -30,4 +30,5 @@ __all__ = ['get_logger',
            'get_kinematics_surround',
            'get_kinematics_state',
            'get_complete_lane_references',
-           'calculate_state_error']
+           'calculate_state_error',
+           'get_project_root']

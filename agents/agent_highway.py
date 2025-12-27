@@ -23,7 +23,7 @@ class AgentHighWayContinuous:
         :param action_dim: 动作维度
         :param lr: 学习率
         """
-        self.config = load_config('../configs/default.yaml')
+        self.config = load_config('configs/default.yaml')
         # 获取环境动作信息
         self.env_acceleration_range = env.unwrapped.config["action"]['acceleration_range']
         self.env_steering_range = env.unwrapped.config["action"]['steering_range']

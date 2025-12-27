@@ -11,7 +11,7 @@ logger = get_logger()
 
 # 读取配置文件
 logger.info('开始读取配置文件')
-config = load_config('../configs/default.yaml')
+config = load_config('configs/default.yaml')
 max_episode = config.train.epochs   # 最大回合数
 max_step = config.train.max_step    # 每回合最大步数
 batch_size = config.train.batch_size    # 每批次训练大小

@@ -25,7 +25,7 @@ class AgentOcp:
         :param actor_lr: 策略学习率
         :param critic_lr: 评论家学习率
         """
-        self.config = load_config('../configs/default.yaml')
+        self.config = load_config('configs/default.yaml')
         # 获取环境动作信息
         self.env_acceleration_range = env.unwrapped.config["action"]['acceleration_range']
         self.env_steering_range = env.unwrapped.config["action"]['steering_range']

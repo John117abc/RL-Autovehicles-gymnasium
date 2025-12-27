@@ -6,7 +6,7 @@ from utils import normalize_Kinematics_obs
 from utils import load_config,load_checkpoint,Plotter
 
 # 读取配置文件
-config = load_config('../configs/default.yaml')
+config = load_config('configs/default.yaml')
 checkpoint_dir = config.checkpoints
 # 初始化环境
 env = get_highway_discrete_env()
