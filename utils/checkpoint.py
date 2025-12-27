@@ -15,9 +15,9 @@ def save_checkpoint(
         metrics: dict = None,
         extension: str = "pth",
         optimizer=None,
-        epoch=None,
         extra_info=None
 ):
+    from utils import get_project_root
     """
     保存模型检查点，自动按日期创建子文件夹（如 checkpoints/20251223/...）
 
@@ -32,6 +32,9 @@ def save_checkpoint(
         epoch: 当前 epoch
         extra_info: 其他自定义信息
     """
+    # 获取根目录信息
+    file_dir = get_project_root() / file_dir
+
     # 1. 获取当前日期和时间
     today = datetime.now().strftime("%Y%m%d")  # 20251223
     time_now = datetime.now().strftime("%H%M%S")  # 145723
@@ -81,7 +84,11 @@ def load_checkpoint(model, filepath, optimizer=None, device=None):
     Returns:
         checkpoint: 完整的 checkpoint 字典（包含 epoch、extra_info 等）
     """
-    if not os.path.exists(filepath):
+    from utils import get_project_root
+
+    filepath = get_project_root() / filepath
+
+    if not filepath.exists():
         raise FileNotFoundError(f"Checkpoint file not found: {filepath}")
 
     # 自动选择设备（如果未指定）

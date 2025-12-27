@@ -156,7 +156,8 @@ class AgentOcp:
             steer ∈ [-0.785, 0.785]
         """
         # 从缓冲区采样
-        states, actions, rewards, values, next_states, dones, infos, _ = buffer.sample_batch(self.batch_size)
+        batch_size = min(self.batch_size,buffer.size())
+        states, actions, rewards, values, next_states, dones, infos,_ = buffer.sample_batch(batch_size)
         # 转为tensor
         state_ego,state_other,state_s_ref,_ = zip(*states)
         state_s_ref = torch.from_numpy(np.array(state_s_ref)).to(self.device).float()
