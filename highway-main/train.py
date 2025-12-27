@@ -44,14 +44,17 @@ max_avg_reward = float("-inf")
 train_step = 0
 
 # 初始化历史记录
-history = {
+history_critic = {
     'episode': [],
-    'total_reward': [],
-    'avg_loss':[],
-    'avg_return':[]
+    'loss_critic': []
 }
 
-StateInfo = namedtuple('StateInfo', ['state_ego', 'state_other', 'state_ref'])
+history_actor = {
+    'episode': [],
+    'loss_actor':[]
+}
+
+StateInfo = namedtuple('StateInfo', ['state_ego', 'state_other', 'state_s_ref','state_x_ref'])
 # 开始训练
 for episode in range(max_episode):
     obs, _ = env.reset()
@@ -71,7 +74,8 @@ for episode in range(max_episode):
         state_info = StateInfo(
             state['state_ego'],
             state['state_other'],
-            state['state_ref']
+            state['state_s_ref'],
+            state['state_x_ref']
         )
         # 暂存单条轨迹储经验
         state = get_kinematics_state(next_state,env)
@@ -79,30 +83,21 @@ for episode in range(max_episode):
         episode_buffer.append(experience)
         step_count+=1
 
+        # 打印终止原因
+        if done:
+            print(f"回合结束于第 {step_count} 步:")
+            print(f"  terminated={terminated}, truncated={truncated}")
+            print(f"  终止信息={info}")
+
     logger.info(f'第{episode+1}次回合结束')
     # 存储经验
     buffer_manage.add_trajectory(episode_buffer)
     # 如果经验缓冲区的数据够训练，则开始采样训练
     if buffer_manage.size_trajectory() >= min_start_train:
-        agent.update_critic(buffer_manage)
+        loss_critic = agent.update_critic(buffer_manage)
         if episode % actor_interval ==0:
             # 进行actor更新
-            agent.update_actor(buffer_manage)
-
-    # 打印终止原因
-    if done:
-        print(f"回合结束于第 {step_count} 步:")
-        print(f"  terminated={terminated}, truncated={truncated}")
-        print(f"  终止信息={info}")
-        print("Actions:", actions_taken[:20])
-
-    # 打印进度
-    episode_rewards.append(total_reward)
-    if episode % 10 == 0:
-        avg_reward = np.mean(episode_rewards[-10:])
-        max_avg_reward = max(avg_reward,max_avg_reward)
-        train_step += step_count
-        print(f"回合 {episode}, 平均奖励: {avg_reward:.2f}")
+            loss_actor = agent.update_actor(buffer_manage)
 
 env.close()
 # 存储训练参数
@@ -112,12 +107,22 @@ print('开始存储训练参数')
 metrics = {'max_avg_reward':max_avg_reward,'train_step':train_step}
 
 # 存储历史数据
-extra_info = {'history':history}
-checkpoint.save_checkpoint(model= agent.model,
-                           model_name='a2c-mlp',
+extra_info_critic = {'history':history_critic}
+extra_info_actor = {'history':history_actor}
+checkpoint.save_checkpoint(model= agent.actor_optimizer,
+                           model_name='a-a2c-mlp',
                            env_name='highway-v0',
                            file_dir=config.checkpoints,
                            metrics = metrics,
-                           optimizer=agent.optimizer,
+                           optimizer=agent.actor_optimizer,
                            epoch = max_episode,
-                           extra_info = extra_info)
+                           extra_info = extra_info_actor)
+
+checkpoint.save_checkpoint(model= agent.critic_optimizer,
+                           model_name='c-a2c-mlp',
+                           env_name='highway-v0',
+                           file_dir=config.checkpoints,
+                           metrics = metrics,
+                           optimizer=agent.critic_optimizer,
+                           epoch = max_episode,
+                           extra_info = extra_info_critic)

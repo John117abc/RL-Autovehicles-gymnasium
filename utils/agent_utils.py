@@ -58,7 +58,7 @@ def get_three_lane_paths(env, horizon=50, longitudinal_step=5.0):
 
 def calculate_state_error(obs, reference):
     """
-    计算状态误差向量 s^ref = [delta_p, delta_phi, delta_v]
+    计算状态误差向量 s^ref = [delta_p, delta_phi, delta_v] 和静态路径的x，y，v_l,φ
 
     Args:
         obs: 观察状态
@@ -112,7 +112,7 @@ def calculate_state_error(obs, reference):
     ref_speed = reference['velocities'][nearest_idx]
     delta_v = ego_state['speed'] - ref_speed
 
-    return np.array([delta_p, delta_phi, delta_v])
+    return np.array([delta_p, delta_phi, delta_v]),np.array([nearest_ref_point[0],nearest_ref_point[1],ref_speed,0.0,ref_heading,0])
 
 
 def get_complete_lane_references(env, horizon=50, longitudinal_step=5.0):
@@ -558,11 +558,12 @@ def get_kinematics_state(obs,env):
     # 周车信息
     state_other = get_kinematics_surround(obs)
     # 参考信息,1是自车道
-    state_ref = calculate_state_error(obs,get_complete_lane_references(env)[1])
-    return {'state':np.concatenate([state_ego, list(itertools.chain.from_iterable(state_other)) , state_ref]),
+    state_s_ref,state_x_ref = calculate_state_error(obs,get_complete_lane_references(env)[1])
+    return {'state':np.concatenate([state_ego, list(itertools.chain.from_iterable(state_other)) , state_s_ref]),
             'state_ego':state_ego,
             'state_other':state_other,
-            'state_ref':state_ref
+            'state_s_ref':state_s_ref,
+            'state_x_ref':state_x_ref
             }
 
 

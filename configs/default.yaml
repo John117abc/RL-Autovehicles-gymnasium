@@ -13,9 +13,9 @@ model:
     in_channels: 1
 
 train:
-  batch_size: 64
+  batch_size: 256
   buffer_size: 500000
   epochs: 1000
   max_step: 128
-  min_start_train: 1  # 最小训练启动样本量
+  min_start_train: 64  # 最小训练启动样本量
   actor_interval: 10
