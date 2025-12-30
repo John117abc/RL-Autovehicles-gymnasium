@@ -76,28 +76,28 @@ for episode in range(max_episode):
         state = get_kinematics_state_static(env,next_obs, path)
         # 步数+1
         step_count+=1
+        # 检查是否可以开始训练
+        if agent.store_len() > start_count:
+            # 更新 Critic
+            loss_critic = agent.update_critic()
+            history_critic['loss_critic'].append(loss_critic)
+            history_critic['episode'].append(episode + 1)
+            history_critic['reward'].append(total_reward)
 
-    # 检查是否可以开始训练
-    if agent.store_len() > start_count:
-        # 更新 Critic
-        loss_critic = agent.update_critic()
-        history_critic['loss_critic'].append(loss_critic)
-        history_critic['episode'].append(episode + 1)
-        history_critic['reward'].append(total_reward)
+            # 更新 Actor
+            loss = agent.update_actor()
+            history_actor['episode'].append(episode + 1)
+            history_actor['loss_actor'].append(loss)
+            history_actor['reward'].append(total_reward)
 
-        # 更新 Actor
-        loss = agent.update_actor()
-        history_actor['episode'].append(episode + 1)
-        history_actor['loss_actor'].append(loss)
-        history_actor['reward'].append(total_reward)
+            # 打印日志
+            log_msg = f"第{episode}回合 | 训练步数 | Critic Loss: {loss_critic:.5f}  | Actor Loss: {loss:.5f} | Penalty: {agent.penalty:.3f}"
+            logger.info(log_msg)
 
-        # 更新 ρ (惩罚系数)
-        if episode % amplifier_m == 0:
-            agent.update_penalty()
-
-        # 打印日志
-        log_msg = f"第{episode}回合 | 训练步数 | Critic Loss: {loss_critic:.5f}  | Actor Loss: {loss:.5f} | Penalty: {agent.penalty:.3f}"
-        logger.info(log_msg)
+    # 更新 ρ (惩罚系数)
+    if episode % amplifier_m == 0:
+        agent.update_penalty()
+        agent.clean_mem()
 
     # 可选：保存最佳模型
     if total_reward > max_avg_reward:

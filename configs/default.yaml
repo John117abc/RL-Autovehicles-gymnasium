@@ -13,10 +13,10 @@ model:
     in_channels: 1
 
 train:
-  batch_size: 64
+  batch_size: 128
   buffer_size: 500000
   epochs: 1000
-  max_step: 1024
-  start_count: 1  # 开始训练时候缓冲区轨迹数量
+  max_step: 256
+  start_count: 256  # 开始训练时候缓冲区轨迹数量
   amplifier_c: 1.1
   amplifier_m: 10 # 10回合更新一次m

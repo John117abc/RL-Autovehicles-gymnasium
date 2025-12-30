@@ -8,7 +8,7 @@ from random import sample
 
 class AgentOcp:
     def __init__(self,env,state_dim,
-                 hidden_dim = 256,action_dim = 2,actor_lr = 0.9,critic_lr = 0.999):
+                 hidden_dim = 256,action_dim = 2,actor_lr = 3e-4,critic_lr = 3e-3):
         """
         智能体
         :param state_dim: 状态空间维度
@@ -102,7 +102,6 @@ class AgentOcp:
         state_all = torch.from_numpy(state_all_np).to(self.device).float()
         Q_matrix_tensor = torch.from_numpy(self.Q_matrix).to(self.device).float()
         R_matrix_tensor = torch.from_numpy(self.R_matrix).to(self.device).float()
-        M_matrix_tensor = torch.from_numpy(self.M_matrix).to(self.device).float()
         # 跟踪误差
         actions = self.select_action(state_all_np,grad=True)
         tracking_error = ((state_x_refs - state_ego) @ Q_matrix_tensor) * (state_x_refs - state_ego)
@@ -128,8 +127,7 @@ class AgentOcp:
         # 从缓冲区采样
         states, actions = zip(*sample(self.memory, self.batch_size))
         # 转为tensor
-        state_x_refs = torch.from_numpy(np.array([[s['state_x_ref'] for s in states]])).squeeze(0).to(
-            self.device).float()
+        state_x_refs = torch.from_numpy(np.array([[s['state_x_ref'] for s in states]])).squeeze(0).to(self.device).float()
         state_ego = torch.from_numpy(np.array([[s['state_ego'] for s in states]])).squeeze(0).to(self.device).float()
         state_all_np = np.array([[s['state'] for s in states]]).squeeze(0)
         x_roads = torch.from_numpy(np.array([[s['x_road'] for s in states]])).squeeze(0).to(self.device).float()
@@ -144,17 +142,15 @@ class AgentOcp:
         l_actor = torch.mean(tracking_error) + torch.mean(control_energy)
 
         # 周车约束
-        ge_car = torch.max(torch.tensor(0.0),-(state_ego - state_x_refs) @ M_matrix_tensor * (state_ego - state_x_refs)) ** 2
+        ge_car = torch.max(torch.tensor(0.0),(state_ego - state_x_refs) @ M_matrix_tensor * (state_ego - state_x_refs)) ** 2
         # 道路约束
-        ge_road = torch.max(torch.tensor(0.0), -(state_ego - x_roads) @ M_matrix_tensor * (state_ego - x_roads)) ** 2
-        constraint = self.penalty * (torch.mean(ge_car) + torch.mean(ge_road))
+        ge_road = torch.max(torch.tensor(0.0), (state_ego - x_roads) @ M_matrix_tensor * (state_ego - x_roads)) ** 2
+        constraint = self.penalty * torch.mean(ge_car + ge_road)
 
-        loss_actor = torch.mean(l_actor + constraint)
-
+        loss_actor = l_actor + constraint
         self.actor_optimizer.zero_grad()
         loss_actor.backward()
         self.actor_optimizer.step()
-
         return loss_actor
 
     def static_road_plan(self,env):
