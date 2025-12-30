@@ -3,15 +3,8 @@ import numpy as np
 from torch import nn
 from torch.distributions import Normal
 from models import ActorNet,CriticNet
-from utils import setup_code_environment,load_config,normalize_action,get_three_lane_paths
-from buffer import IDCBuffer
-# # 设备选择
-# device = (
-#     "cuda" if torch.cuda.is_available()
-#     else "mps" if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
-#     else "cpu"
-# )
-# print(f"使用设备: {device}")
+from utils import setup_code_environment,load_config,get_three_lane_paths
+from random import sample
 
 class AgentOcp:
     def __init__(self,env,state_dim,
@@ -43,11 +36,13 @@ class AgentOcp:
         self.device = self.config.device
 
         # 初始化神经网络
-        self.actor_model = ActorNet(self.state_dim,self.hidden_dim,2 * self.action_dim).to(self.device)
+        self.actor_model = ActorNet(self.state_dim,self.hidden_dim,self.action_dim).to(self.device)
         self.actor_optimizer = torch.optim.Adam(self.actor_model.parameters(),lr = actor_lr)
 
         self.critic_model = CriticNet(self.state_dim,self.hidden_dim).to(self.device)
         self.critic_optimizer = torch.optim.Adam(self.critic_model.parameters(),lr=critic_lr)
+
+        self.loss_func = nn.MSELoss()
 
         self.gamma = 0.99
         self.memory = []
@@ -55,13 +50,14 @@ class AgentOcp:
         # 惩罚放大系数
         self.penalty = 1.0
         self.penalty_amplifier = 1.1
+        self.penalty_max = 20
 
         # 正定矩阵
-        self.Q_matrix = [0.04, 0.04, 0.01, 0.01, 0.1, 0.02] * np.identity(6)
-        self.R_matrix = [0.1, 0.005] * np.identity(2)
-        self.M_matrix = [1,1,0,0,0,0] * np.identity(6)
+        self.Q_matrix = np.diag([0.04, 0.04, 0.01, 0.01, 0.1, 0.02])
+        self.R_matrix = np.diag([0.1, 0.005])
+        self.M_matrix = np.diag([1,1,0,0,0,0])
         # 严格使用s^ref = [δp, δφ, δv ]状态时候的Q
-        self.Q_matrix_ref = [0.04,0.1,0.01] * np.identity(3)
+        self.Q_matrix_ref = np.diag([0.04,0.1,0.01])
 
 
     def _setup(self):
@@ -71,131 +67,95 @@ class AgentOcp:
     def store_transition(self, state_info):
         self.memory.append(state_info)
 
-    @torch.no_grad()
-    def select_action(self, state: np.ndarray):
+    def store_len(self):
+        return len(self.memory)
+
+    def select_action(self,state: np.ndarray,grad: bool = False):
         """
         根据当前策略选择动作（用于与环境交互）。
         :param state: 状态数组，shape=[state_dim,]
-        :return: (action, log_prob, value)
+        :param grad: 是否需要梯度
+        :return: (action, log_prob)
         """
-        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        if not grad:
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            with torch.no_grad():
+                action = self.actor_model(state_tensor)
+            return action.cpu().detach().numpy().flatten()
+        else:
+            state_tensor = torch.from_numpy(state).squeeze(0).to(self.device).float()
+            action = self.actor_model(state_tensor)
+            return action
 
-        # 前向传播策略网络
-        mu, log_std = self.actor_model(state_tensor)  # [1, 2*action_dim]
-        std = torch.exp(log_std.clamp(-20, 2))  # 防止爆炸
-
-        # 构建高斯分布并采样
-        # 对转向角采样
-        dist = Normal(mu, std)
-        raw_action = dist.sample()
-        # 动作映射到tan
-        action = torch.tanh(raw_action)
-        value = self.critic_model(state_tensor)
-        return (
-            action.cpu().detach().numpy().flatten(),
-            value.cpu().detach().numpy().flatten()
-        )
-
-    def calculate_j_critic(self, state_s_ref, value_t, actions):
+    # 更新critic
+    def update_critic(self):
         """
-        计算J_critic
-        :param state_s_ref: 参考信息：文献中的s^ref
-        :param value_t: t时刻critic网络计算的value
-        :param actions: 每个时刻的动作
-        :return: 计算值
+        更新评论家网络ω
         """
-        Q_matrix = torch.from_numpy(np.array(self.Q_matrix_ref)).to(self.device).float()
-        R_matrix = torch.from_numpy(np.array(self.R_matrix)).to(self.device).float()
-        dx = state_s_ref
-        cost_state = torch.sum((dx @ Q_matrix) * dx)
-        cost_action = torch.sum((actions @ R_matrix) * actions)
-
-        # 损失
-        loss = (cost_state + cost_action) - value_t
-
-        total_cost = torch.sum(loss ** 2).requires_grad_(True)
-        return total_cost
-
-    def calculate_j_p(self, state_other, state_ego, state_s_ref,state_x_ref, actions):
-        """
-        计算J_critic
-        :param state_other: 参考信息：文献中的s^ref
-        :param state_ego: t时刻critic网络计算的value
-        :param state_s_ref: 参考信息：文献中的s^ref
-        :param state_x_ref: 参考信息：文献中的x^ref
-        :param actions: 每个时刻的动作
-        :return: 计算值
-        """
-        M_matrix = torch.from_numpy(np.array(self.M_matrix)).to(self.device).float()
-        penalty = torch.tensor(self.penalty).to(self.device).float()
-
-        Q_matrix = torch.from_numpy(np.array(self.Q_matrix_ref)).to(self.device).float()
-        R_matrix = torch.from_numpy(np.array(self.R_matrix)).to(self.device).float()
-        lx = state_s_ref
-        cost_state = torch.sum((lx @ Q_matrix) * lx)
-        cost_action = torch.sum((actions @ R_matrix) * actions)
-
-        l = cost_state + cost_action
-
-        p_car = state_ego.unsqueeze(1) - state_other
-        ge_car = torch.sum(penalty * torch.max(torch.tensor(0.0),-(p_car @ M_matrix) * p_car))
-
-        p_ref = state_ego - state_x_ref
-        get_ref = torch.sum(penalty * torch.max(torch.tensor(0.0),-(p_ref @ M_matrix) * p_ref))
-
-        loss = (l  + (ge_car + get_ref)).requires_grad_(True)
-
-        return  loss
-
-    # 使用A2C算法更新策略
-    def update_critic(self,buffer:IDCBuffer):
-        """
-        使用收集到的整条轨迹更新共享主干的 Actor-Critic 网络（on-policy A2C）。
-        假设动作已通过 tanh + 线性缩放映射到物理空间：
-            acc ∈ [-5.0, 5.0]
-            steer ∈ [-0.785, 0.785]
-        """
+        # 1.更新评论家网络
         # 从缓冲区采样
-        batch_size = min(self.batch_size,buffer.size())
-        states, actions, rewards, values, next_states, dones, infos,_ = buffer.sample_batch(batch_size)
+        states,actions = zip(*sample(self.memory, self.batch_size))
         # 转为tensor
-        state_ego,state_other,state_s_ref,_ = zip(*states)
-        state_s_ref = torch.from_numpy(np.array(state_s_ref)).to(self.device).float()
-        value = torch.tensor(values[0]).to(self.device).float()
-        actions = torch.from_numpy(actions).to(self.device).float()
-        # 计算J_critic
-        j_critic = self.calculate_j_critic(state_s_ref, value, actions)
-        # 计算梯度反向传播
-        self.critic_model.zero_grad()
-        j_critic.backward()
+        state_x_refs = torch.from_numpy(np.array([[s['state_x_ref'] for s in states]])).squeeze(0).to(self.device).float()
+        state_ego = torch.from_numpy(np.array([[s['state_ego'] for s in states]])).squeeze(0).to(self.device).float()
+        state_all_np = np.array([[s['state'] for s in states]]).squeeze(0)
+        state_all = torch.from_numpy(state_all_np).to(self.device).float()
+        Q_matrix_tensor = torch.from_numpy(self.Q_matrix).to(self.device).float()
+        R_matrix_tensor = torch.from_numpy(self.R_matrix).to(self.device).float()
+        M_matrix_tensor = torch.from_numpy(self.M_matrix).to(self.device).float()
+        # 跟踪误差
+        actions = self.select_action(state_all_np,grad=True)
+        tracking_error = ((state_x_refs - state_ego) @ Q_matrix_tensor) * (state_x_refs - state_ego)
+        control_energy = (actions @ R_matrix_tensor) * actions
+        # 文章中的l(si|t, πθ(si|t))
+        l_critic = torch.mean(tracking_error) + torch.mean(control_energy)
+
+        # 文章中的Vw(s0|t)
+        v_w = self.critic_model(state_all)
+        v_w = torch.mean(v_w)
+        loss_critic = self.loss_func(l_critic,v_w)
+        #更新ω
+        self.critic_optimizer.zero_grad()
+        loss_critic.backward()
         self.critic_optimizer.step()
 
-        return j_critic
+        return loss_critic.detach().item()
 
-    # 使用A2C算法更新策略
-    def update_actor(self, buffer: IDCBuffer):
+    def update_actor(self):
         """
-        使用收集到的整条轨迹更新共享主干的 Actor-Critic 网络（on-policy A2C）。
-        假设动作已通过 tanh + 线性缩放映射到物理空间：
-            acc ∈ [-5.0, 5.0]
-            steer ∈ [-0.785, 0.785]
+        更新策略网络θ
         """
         # 从缓冲区采样
-        states, actions, rewards, values, next_states, dones, infos, _ = buffer.sample_batch(self.batch_size)
+        states, actions = zip(*sample(self.memory, self.batch_size))
         # 转为tensor
-        state_ego, state_other, state_s_ref,state_x_ref = zip(*states)
-        state_other = torch.from_numpy(np.array(state_other)).to(self.device).float()
-        state_ego = torch.from_numpy(np.array(state_ego)).to(self.device).float()
-        state_s_ref = torch.from_numpy(np.array(state_s_ref)).to(self.device).float()
-        state_x_ref = torch.from_numpy(np.array(state_x_ref)).to(self.device).float()
-        actions = torch.from_numpy(actions).to(self.device).float()
-        # 计算J_critic
-        j_p = self.calculate_j_p(state_other, state_ego, state_s_ref,state_x_ref, actions)
-        # 计算梯度反向传播
-        self.critic_model.zero_grad()
-        j_p.backward()
+        state_x_refs = torch.from_numpy(np.array([[s['state_x_ref'] for s in states]])).squeeze(0).to(
+            self.device).float()
+        state_ego = torch.from_numpy(np.array([[s['state_ego'] for s in states]])).squeeze(0).to(self.device).float()
+        state_all_np = np.array([[s['state'] for s in states]]).squeeze(0)
+        x_roads = torch.from_numpy(np.array([[s['x_road'] for s in states]])).squeeze(0).to(self.device).float()
+        Q_matrix_tensor = torch.from_numpy(self.Q_matrix).to(self.device).float()
+        R_matrix_tensor = torch.from_numpy(self.R_matrix).to(self.device).float()
+        M_matrix_tensor = torch.from_numpy(self.M_matrix).to(self.device).float()
+        # 跟踪误差
+        actions = self.select_action(state_all_np, grad=True)
+        tracking_error = ((state_x_refs - state_ego) @ Q_matrix_tensor) * (state_x_refs - state_ego)
+        control_energy = (actions @ R_matrix_tensor) * actions
+        # 文章中的l(si|t, πθ(si|t))
+        l_actor = torch.mean(tracking_error) + torch.mean(control_energy)
+
+        # 周车约束
+        ge_car = torch.max(torch.tensor(0.0),-(state_ego - state_x_refs) @ M_matrix_tensor * (state_ego - state_x_refs)) ** 2
+        # 道路约束
+        ge_road = torch.max(torch.tensor(0.0), -(state_ego - x_roads) @ M_matrix_tensor * (state_ego - x_roads)) ** 2
+        constraint = self.penalty * (torch.mean(ge_car) + torch.mean(ge_road))
+
+        loss_actor = torch.mean(l_actor + constraint)
+
+        self.actor_optimizer.zero_grad()
+        loss_actor.backward()
         self.actor_optimizer.step()
-        return j_p
+
+        return loss_actor
 
     def static_road_plan(self,env):
         """
@@ -207,3 +167,9 @@ class AgentOcp:
 
     def clean_mem(self):
         self.memory.clear()
+
+    def update_penalty(self):
+        """
+        更新惩罚参数
+        """
+        self.penalty = min(self.penalty * self.penalty_amplifier,self.penalty_max)

@@ -2,7 +2,7 @@ import numpy as np
 from collections import namedtuple
 from agents import AgentOcp
 from custom_env import get_highway_discrete_env
-from utils import checkpoint, load_config, get_kinematics_state, get_logger
+from utils import checkpoint, load_config, get_kinematics_state_current,get_kinematics_state_static, get_logger,get_complete_lane_references
 from buffer import IDCBuffer
 
 # 初始化日志系统
@@ -15,8 +15,9 @@ max_episode = config.train.epochs
 max_step = config.train.max_step
 batch_size = config.train.batch_size
 buffer_size = config.train.buffer_size
-min_start_train = config.train.min_start_train
-actor_interval = config.train.actor_interval
+amplifier_c = config.train.amplifier_c
+start_count = config.train.start_count
+amplifier_m = config.train.amplifier_m
 
 # 初始化环境
 logger.info('开始初始化环境')
@@ -26,15 +27,11 @@ action_dim = 2  # 转向角 + 加速度
 # 初始化智能体
 logger.info('开始初始化智能体')
 obs, _ = env.reset()
-all_state = get_kinematics_state(obs, env)
+all_state = get_kinematics_state_current(obs, env)
 state = all_state['state']
 agent = AgentOcp(env, state_dim=len(state))
 agent.actor_model.train()
 agent.critic_model.train()
-
-# 初始化缓冲区
-logger.info('开始初始化缓冲区')
-buffer_manage = IDCBuffer(buffer_size)
 
 # 初始化参数
 max_avg_reward = float("-inf")
@@ -53,95 +50,59 @@ history_actor = {
     'reward':[]
 }
 
-StateInfo = namedtuple('StateInfo', ['state_ego', 'state_other', 'state_s_ref', 'state_x_ref'])
-
 # 开始训练
 episode_rewards = []
+# 论文中的Dynamic Optimal Tracking-Offline Training算法
 for episode in range(max_episode):
     obs, _ = env.reset()
-    state = get_kinematics_state(obs, env)
     done = False
     total_reward = 0.0
     step_count = 0
-    episode_buffer = []
-
-    # 每一个回合的交互
+    constraint_violations = 0.0
+    # 从环境中进行采样,选择当前车道(Sampling (from environment))
+    # 选择一条路径为参考路径
+    path = get_complete_lane_references(env, horizon=1000)[1]
+    # 初始化xt,xjt
+    state = get_kinematics_state_static(env,obs,path)
     while not done and step_count < max_step:
         env.render()
-        action, value = agent.select_action(state['state'])
+        # 用当前策略生成动作，并且观察
+        action = agent.select_action(state['state'])
+        # 保存state ={τ, xt, xj  t, j ∈ I}
+        agent.store_transition([state,action])
         next_obs, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
-
-        # 构建当前状态快照
-        state_info = StateInfo(
-            state['state_ego'],
-            state['state_other'],
-            state['state_s_ref'],
-            state['state_x_ref']
-        )
-
-        # 获取下一个状态
-        next_state = get_kinematics_state(next_obs, env)
-
-        # 存储经验（注意：value 是当前状态的 critic 估计）
-        experience = state_info, action, reward, value, next_state, done, info
-        episode_buffer.append(experience)
-
-        total_reward += reward
-        state = next_state
-        step_count += 1
-
-        if done:
-            logger.info(f"回合数 {episode + 1} 步数结束于 {step_count}: "
-                        f"terminated={terminated}, truncated={truncated}, 最终获得奖励={reward:.3f}")
-
-    # 回合结束，记录总奖励
-    episode_rewards.append(total_reward)
-    avg_reward = np.mean(episode_rewards[-10:]) if len(episode_rewards) >= 10 else total_reward
-    logger.info(f"回合进度： {episode + 1}/{max_episode} | 总奖励: {total_reward:.3f} | 平均回报: {avg_reward:.3f}")
-
-    # 存入缓冲区
-    buffer_manage.add_trajectory(episode_buffer)
+        # 下一个状态信息
+        state = get_kinematics_state_static(env,next_obs, path)
+        # 步数+1
+        step_count+=1
 
     # 检查是否可以开始训练
-    if buffer_manage.size_trajectory() >= min_start_train:
-        # 更新 Critic（每轮都更新）
-        loss_critic = agent.update_critic(buffer_manage)
-        # 确保 loss 是标量（如果是 tensor，取 item）
-        if isinstance(loss_critic, (float, int)):
-            critic_loss_val = loss_critic
-        else:
-            critic_loss_val = loss_critic.item()
-
+    if agent.store_len() > start_count:
+        # 更新 Critic
+        loss_critic = agent.update_critic()
+        history_critic['loss_critic'].append(loss_critic)
         history_critic['episode'].append(episode + 1)
-        history_critic['loss_critic'].append(critic_loss_val)
         history_critic['reward'].append(total_reward)
 
-        # 更新 Actor（按间隔）
-        loss_actor = None
-        if episode % actor_interval == 0:
-            loss_actor = agent.update_actor(buffer_manage)
-            if isinstance(loss_actor, (float, int)):
-                actor_loss_val = loss_actor
-            else:
-                actor_loss_val = loss_actor.item()
+        # 更新 Actor
+        loss = agent.update_actor()
+        history_actor['episode'].append(episode + 1)
+        history_actor['loss_actor'].append(loss)
+        history_actor['reward'].append(total_reward)
 
-            history_actor['episode'].append(episode + 1)
-            history_actor['loss_actor'].append(actor_loss_val)
-            history_actor['reward'].append(total_reward)
-        else:
-            actor_loss_val = None
+        # 更新 ρ (惩罚系数)
+        if episode % amplifier_m == 0:
+            agent.update_penalty()
 
-        # 打印训练损失（可选：只在有 actor 更新时打印）
-        log_msg = f"训练步数 | Critic Loss: {critic_loss_val:.5f}"
-        if actor_loss_val is not None:
-            log_msg += f" | Actor Loss: {actor_loss_val:.5f}"
+        # 打印日志
+        log_msg = f"第{episode}回合 | 训练步数 | Critic Loss: {loss_critic:.5f}  | Actor Loss: {loss:.5f} | Penalty: {agent.penalty:.3f}"
         logger.info(log_msg)
 
     # 可选：保存最佳模型
     if total_reward > max_avg_reward:
         max_avg_reward = total_reward
-        # 这里可以加 best model 保存逻辑（略）
+        # 这里可以加 best model 保存逻辑
 
 # 训练结束
 env.close()

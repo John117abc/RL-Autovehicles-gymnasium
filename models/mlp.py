@@ -29,7 +29,7 @@ class ActorNet(nn.Module):
     """
     ac/a2c算法的actor网络
     """
-    def __init__(self,state_dim : int,hidden_dim: int = 256,output_dim: int = 4):
+    def __init__(self,state_dim : int,hidden_dim: int = 256,output_dim: int = 2):
         super().__init__()
         self.l1 = nn.Linear(state_dim,hidden_dim)
         self.l2 = nn.Linear(hidden_dim,hidden_dim)
@@ -39,12 +39,12 @@ class ActorNet(nn.Module):
         """
         向前传播
         :param x: 输入参数
-        :return: 转向角，加速度的均值和方差
+        :return: 转向角，加速度 (映射到-1，1)
         """
         x = F.elu(self.l1(x))
         x = F.elu(self.l2(x))
         x = self.l3(x)
-        return x[:,:2],x[:,2:]
+        return F.tanh(x)
 
 class CriticNet(nn.Module):
     """

@@ -64,10 +64,8 @@ class IDCBuffer:
             traj_id = random.randint(0, len(self.trajectories) - 1)
             trajectory = self.trajectories[traj_id]
 
-            states, actions, rewards, values, next_states, dones, infos = zip(*trajectory)
-            return (np.array(states), np.array(actions),
-                    np.array(rewards), np.array(next_states),
-                    np.array(dones), traj_id)
+            states = zip(*trajectory)
+            return np.array(states)
 
     def size(self):
         """返回总样本数"""

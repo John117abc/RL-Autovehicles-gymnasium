@@ -55,6 +55,36 @@ def get_three_lane_paths(env, horizon=50, longitudinal_step=5.0):
 
     return paths  # [left_path, current_path, right_path]
 
+def calculate_x_road(env):
+    """
+    计算自车与道路边缘最近的点的坐标
+    """
+    # 自车（ego vehicle）
+    ego = env.unwrapped.vehicle
+    # 道路网络
+    road = env.unwrapped.road
+    # 自车当前所在的车道
+    lane_index = road.network.get_closest_lane_index(ego.position)
+    lane = road.network.get_lane(lane_index)
+    # 获取自车在车道上的纵向坐标s
+    s, d = lane.local_coordinates(ego.position)
+    lane_width = lane.width  # 通常为 4.0
+
+    # 自车当前位置的 s 值
+    s_ego = s
+    # 左右边缘在 s_ego 处的坐标
+    left_edge = lane.position(s_ego, lane_width / 2)  # 左侧边缘
+    right_edge = lane.position(s_ego, -lane_width / 2)  # 右侧边缘
+
+    if d >= 0:
+        nearest_edge = left_edge  # 更靠近左边缘
+    else:
+        nearest_edge = right_edge  # 更靠近右边缘
+    # print("自车位置:", ego.position)
+    # print("左边缘坐标:", left_edge)
+    # print("右边缘坐标:", right_edge)
+
+    return [nearest_edge[0],nearest_edge[1],0,0,0,0]
 
 def calculate_state_error(obs, reference):
     """
@@ -115,7 +145,7 @@ def calculate_state_error(obs, reference):
     return np.array([delta_p, delta_phi, delta_v]),np.array([nearest_ref_point[0],nearest_ref_point[1],ref_speed,0.0,ref_heading,0])
 
 
-def get_complete_lane_references(env, horizon=50, longitudinal_step=5.0):
+def get_complete_lane_references(env, horizon=50, longitudinal_step=1.0):
     """
     获取 highway-env 中三条车道的完整参考信息
     """
@@ -551,8 +581,8 @@ def get_kinematics_surround(obs, out=None):
     out[:, 5] = 0            # yaw_rate
     return out
 
-def get_kinematics_state(obs,env):
-    """获取kinematics观察模式下的按照论文说的，道路信息，自车信息，周车信息集合 state"""
+def get_kinematics_state_current(obs,env):
+    """获取kinematics观察模式下的当前车道，道路信息，自车信息，周车信息集合 state"""
     # 自车信息
     state_ego = get_kinematics_ego(obs)
     # 周车信息
@@ -566,5 +596,23 @@ def get_kinematics_state(obs,env):
             'state_x_ref':state_x_ref
             }
 
+
+def get_kinematics_state_static(env,obs,references_road):
+    """获取kinematics观察模式下的参考车道，道路信息，自车信息，周车信息集合 state"""
+    # 自车信息
+    state_ego = get_kinematics_ego(obs)
+    # 周车信息
+    state_other = get_kinematics_surround(obs)
+    # 参考信息,1是参考车道
+    state_s_ref,state_x_ref = calculate_state_error(obs,references_road)
+    # x_road信息，自车与道路两边最近的点的坐标
+    x_road = calculate_x_road(env)
+    return {'state':np.concatenate([state_ego, list(itertools.chain.from_iterable(state_other)) , state_s_ref]),
+            'state_ego':state_ego,
+            'state_other':state_other,
+            'state_s_ref':state_s_ref,
+            'state_x_ref':state_x_ref,
+            'x_road':x_road
+            }
 
 

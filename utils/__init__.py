@@ -11,9 +11,10 @@ from .agent_utils import (get_three_lane_paths,
                           normalize_action,
                           get_kinematics_ego,
                           get_kinematics_surround,
-                          get_kinematics_state,
+                          get_kinematics_state_current,
                           get_complete_lane_references,
-                          calculate_state_error)
+                          calculate_state_error,
+                          get_kinematics_state_static)
 __all__ = ['get_logger',
            'save_checkpoint',
            'load_config',
@@ -28,7 +29,8 @@ __all__ = ['get_logger',
            'normalize_action',
            'get_kinematics_ego',
            'get_kinematics_surround',
-           'get_kinematics_state',
+           'get_kinematics_state_current',
            'get_complete_lane_references',
            'calculate_state_error',
-           'get_project_root']
+           'get_project_root',
+           'get_kinematics_state_static']
