@@ -84,7 +84,7 @@ def calculate_x_road(env):
     # print("左边缘坐标:", left_edge)
     # print("右边缘坐标:", right_edge)
 
-    return [nearest_edge[0]/100,nearest_edge[1]/100,0,0,0,0]
+    return [nearest_edge[0],nearest_edge[1],0,0,0,0]
 
 def calculate_state_error(obs, reference):
     """
@@ -558,10 +558,10 @@ def get_kinematics_ego(obs, out=None):
         out = np.empty(6, dtype=ego.dtype)
 
     # 按顺序填充：x, y, vy, vx, heading, yaw_rate
-    out[0] = ego[1]/100  # x
-    out[1] = ego[2]/100  # y
-    out[2] = ego[4]/20  # vy
-    out[3] = ego[3]/20  # vx
+    out[0] = ego[1]  # x
+    out[1] = ego[2]  # y
+    out[2] = ego[4]  # vy
+    out[3] = ego[3]  # vx
     out[4] = ego[5]  # heading
     out[5] = ego[8]  # yaw_rate
 
@@ -573,9 +573,9 @@ def get_kinematics_surround(obs, out=None):
     M = s.shape[0]
     if out is None:
         out = np.empty((M, 6), dtype=s.dtype)
-    out[:, 0] = s[:, 1]/100      # x
-    out[:, 1] = s[:, 2]/100      # y
-    out[:, 2] = s[:, 4]/20      # vy
+    out[:, 0] = s[:, 1]      # x
+    out[:, 1] = s[:, 2]      # y
+    out[:, 2] = s[:, 4]      # vy
     out[:, 3] = 0            # vx
     out[:, 4] = s[:, 5]      # heading
     out[:, 5] = 0            # yaw_rate

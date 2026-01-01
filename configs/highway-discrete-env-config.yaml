@@ -1,16 +1,16 @@
 {
         "action": {
             "type": "ContinuousAction", # 线性动作
-            "acceleration_range": [0, 3.0],       # 纵向加速度范围 (m/s²)
+            "acceleration_range": [0, 1.0],       # 纵向加速度范围 (m/s²)
             "steering_range": [-0.785, 0.785],     # 转向角范围 (弧度，约 ±45°)
-            "speed_range":[-5.0,20.0],       # 可达速度范围 [m/s]
+            "speed_range":[-5.0,10.0],       # 可达速度范围 [m/s]
             "longitudinal": True,       # 启用油门控制
             "lateral": True,        # 启用转向控制
             "dynamical": True,      # 是否模拟动力学（例如摩擦力）而非运动学
         },
         "vehicles_density":2.0,
         "lanes_count": 4,   # 车道数
-        "vehicles_count": 30,   # 车辆数
+        "vehicles_count": 0,   # 车辆数
         "duration": 200,  # [s]  # 时间s
         "initial_spacing": 2.0,   # 初始间距
         "collision_reward": -1000,  # 碰撞奖励
@@ -22,7 +22,7 @@
           "random_lane_change": 0.15,
           "aggressiveness": 0.8  # 增加攻击性
         },
-        "screen_width": 600,  # [px]  # 显示宽度
+        "screen_width": 1000,  # [px]  # 显示宽度
         "screen_height": 150,  # [px] # 显示高度
         "centering_position": [0.3, 0.5],   # 居中位置
         "scaling": 5.5,   # 缩放

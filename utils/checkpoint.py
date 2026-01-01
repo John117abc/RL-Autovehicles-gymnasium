@@ -158,3 +158,12 @@ def to_serializable(obj):
         return obj.tolist()  # 或保留为 tensor（如果需要）
     else:
         return obj
+
+
+
+def aaa():
+    from utils import get_project_root
+    return get_project_root() / 'checkpoints'
+
+if __name__ == '__main__':
+    print(aaa())

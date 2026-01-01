@@ -2,7 +2,7 @@ import numpy as np
 from collections import namedtuple
 from agents import AgentOcp
 from custom_env import get_highway_discrete_env
-from utils import checkpoint, load_config, get_kinematics_state_current,get_kinematics_state_static, get_logger,get_complete_lane_references
+from utils import checkpoint, load_config, get_kinematics_state_current,get_kinematics_state_static, get_logger,get_complete_lane_references,compute_reward_IDC
 from buffer import IDCBuffer
 
 # 初始化日志系统
@@ -61,11 +61,15 @@ for episode in range(max_episode):
     constraint_violations = 0.0
     # 从环境中进行采样,选择当前车道(Sampling (from environment))
     # 选择一条路径为参考路径
-    path = get_complete_lane_references(env, horizon=1000)[1]
+    path = get_complete_lane_references(env, horizon=20)[1]
     # 初始化xt,xjt
     state = get_kinematics_state_static(env,obs,path)
+    loss_critic_one_eps = []
+    loss_actor_one_eps = []
+    reward_one_eps = []
     while not done and step_count < max_step:
         env.render()
+        path = get_complete_lane_references(env, horizon=20)[1]
         # 用当前策略生成动作，并且观察
         action = agent.select_action(state['state'])
         # 保存state ={τ, xt, xj  t, j ∈ I}
@@ -76,54 +80,87 @@ for episode in range(max_episode):
         state = get_kinematics_state_static(env,next_obs, path)
         # 步数+1
         step_count+=1
+        # 计算奖励
+        reward = compute_reward_IDC(env, action)
         # 检查是否可以开始训练
         if agent.store_len() > start_count:
             # 更新 Critic
             loss_critic = agent.update_critic()
-            history_critic['loss_critic'].append(loss_critic)
-            history_critic['episode'].append(episode + 1)
-            history_critic['reward'].append(total_reward)
+            loss_critic_one_eps.append(loss_critic)
 
             # 更新 Actor
-            loss = agent.update_actor()
-            history_actor['episode'].append(episode + 1)
-            history_actor['loss_actor'].append(loss)
-            history_actor['reward'].append(total_reward)
+            loss_actor = agent.update_actor()
+            loss_actor_one_eps.append(loss_actor)
 
-            # 打印日志
-            log_msg = f"第{episode}回合 | 训练步数 | Critic Loss: {loss_critic:.5f}  | Actor Loss: {loss:.5f} | Penalty: {agent.penalty:.3f}"
-            logger.info(log_msg)
+            reward_one_eps.append(reward)
+
+            # 存储模型参数
+            history_critic['loss_critic'].append(np.mean(loss_critic_one_eps))
+            history_critic['episode'].append(episode + 1)
+            history_critic['reward'].append(np.mean(reward_one_eps))
+
+            history_actor['episode'].append(episode + 1)
+            history_actor['loss_actor'].append(np.mean(loss_actor_one_eps))
+            history_actor['reward'].append(np.mean(reward_one_eps))
+
+    # 打印日志
+    if len(loss_critic_one_eps) > 0 and len(loss_critic_one_eps) > 0:
+        log_msg = (f"第{episode}回合 | 训练步数{step_count} | Critic Loss: {np.mean(loss_critic_one_eps):.5f}  "
+                   f"| Actor Loss: {np.mean(loss_actor_one_eps):.5f} | Penalty: {agent.penalty:.3f}  |  Reward:{np.mean(reward_one_eps):.3f}")
+        logger.info(log_msg)
 
     # 更新 ρ (惩罚系数)
     if episode % amplifier_m == 0:
         agent.update_penalty()
         agent.clean_mem()
 
-    # 可选：保存最佳模型
-    if total_reward > max_avg_reward:
-        max_avg_reward = total_reward
-        # 这里可以加 best model 保存逻辑
+    # 保存最佳模型
+    if len(reward_one_eps) > 0 and np.mean(reward_one_eps) > max_avg_reward and episode/max_episode > 0.1:
+        max_avg_reward = np.mean(reward_one_eps)
+        # 保存模型
+        metrics = {'max_avg_reward': max_avg_reward, 'episode': episode+1}
 
-# 训练结束
-env.close()
-logger.info("训练完成！")
+        extra_info_actor = {'history': history_actor}
+        extra_info_critic = {'history': history_critic}
 
-# 保存最终模型和历史
-metrics = {'max_avg_reward': max_avg_reward, 'train_step': train_step}
+        # 保存 Actor
+        checkpoint.save_checkpoint(
+            model=agent.actor_model,
+            model_name='ac-actor',
+            env_name='highway-v0',
+            file_dir=config.checkpoints,
+            metrics=metrics,
+            optimizer=agent.actor_optimizer,
+            extra_info=extra_info_actor
+        )
+
+        # 保存 Critic
+        checkpoint.save_checkpoint(
+            model=agent.critic_model,
+            model_name='ac-critic',
+            env_name='highway-v0',
+            file_dir=config.checkpoints,
+            metrics=metrics,
+            optimizer=agent.critic_optimizer,
+            extra_info=extra_info_critic
+        )
+        logger.info("模型与训练历史已保存。")
+
+
+# max_avg_reward = np.mean(reward_one_eps)
+# # 保存模型
+# metrics = {'max_avg_reward': max_avg_reward, 'episode': episode+1}
 
 extra_info_actor = {'history': history_actor}
 extra_info_critic = {'history': history_critic}
 
-# 参数保存路径
-
-
 # 保存 Actor
 checkpoint.save_checkpoint(
     model=agent.actor_model,
-    model_name='a-a2c-mlp',
+    model_name='ac-actor',
     env_name='highway-v0',
     file_dir=config.checkpoints,
-    metrics=metrics,
+    # metrics=metrics,
     optimizer=agent.actor_optimizer,
     extra_info=extra_info_actor
 )
@@ -131,12 +168,15 @@ checkpoint.save_checkpoint(
 # 保存 Critic
 checkpoint.save_checkpoint(
     model=agent.critic_model,
-    model_name='c-a2c-mlp',
+    model_name='ac-critic',
     env_name='highway-v0',
     file_dir=config.checkpoints,
-    metrics=metrics,
+    # metrics=metrics,
     optimizer=agent.critic_optimizer,
     extra_info=extra_info_critic
 )
-
 logger.info("模型与训练历史已保存。")
+
+# 训练结束
+env.close()
+logger.info("训练完成！")

@@ -17,7 +17,7 @@ def setup_code_environment(config):
             - output_dir: str (可选，用于创建目录)
     """
     # 1. 设置随机种子
-    seed = getattr(config, 'seed', 42)
+    seed = getattr(config, 'seed', 22)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # 所有 GPU
     np.random.seed(seed)

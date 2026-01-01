@@ -1,14 +1,13 @@
 import torch
 import numpy as np
 from torch import nn
-from torch.distributions import Normal
 from models import ActorNet,CriticNet
 from utils import setup_code_environment,load_config,get_three_lane_paths
 from random import sample
 
 class AgentOcp:
     def __init__(self,env,state_dim,
-                 hidden_dim = 256,action_dim = 2,actor_lr = 3e-4,critic_lr = 3e-3):
+                 hidden_dim = 256,action_dim = 2,actor_lr = 3e-4,critic_lr = 3e-4):
         """
         智能体
         :param state_dim: 状态空间维度
@@ -142,16 +141,16 @@ class AgentOcp:
         l_actor = torch.mean(tracking_error) + torch.mean(control_energy)
 
         # 周车约束
-        ge_car = torch.max(torch.tensor(0.0),(state_ego - state_x_refs) @ M_matrix_tensor * (state_ego - state_x_refs)) ** 2
+        ge_car = torch.max(torch.tensor(0.0),(state_ego - state_x_refs) @ M_matrix_tensor * (state_ego - state_x_refs))
         # 道路约束
-        ge_road = torch.max(torch.tensor(0.0), (state_ego - x_roads) @ M_matrix_tensor * (state_ego - x_roads)) ** 2
+        ge_road = torch.max(torch.tensor(0.0), (state_ego - x_roads) @ M_matrix_tensor * (state_ego - x_roads))
         constraint = self.penalty * torch.mean(ge_car + ge_road)
 
         loss_actor = l_actor + constraint
         self.actor_optimizer.zero_grad()
         loss_actor.backward()
         self.actor_optimizer.step()
-        return loss_actor
+        return loss_actor.detach().item()
 
     def static_road_plan(self,env):
         """

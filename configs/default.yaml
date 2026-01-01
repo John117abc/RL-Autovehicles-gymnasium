@@ -3,8 +3,8 @@ seed: 22
 device: cuda
 cudnn_deterministic: true
 cudnn_benchmark: false
-checkpoints: '/checkpoints'
-log_path: '/logs'
+checkpoints: 'checkpoints'
+log_path: 'logs'
 
 model:
   name: "MlpNet"
