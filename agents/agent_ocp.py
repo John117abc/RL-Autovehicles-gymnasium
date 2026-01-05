@@ -7,7 +7,7 @@ from random import sample
 
 class AgentOcp:
     def __init__(self,env,state_dim,
-                 hidden_dim = 256,action_dim = 2,actor_lr = 3e-4,critic_lr = 3e-4):
+                 hidden_dim = 256,action_dim = 2,actor_lr = 1e-3,critic_lr = 1e-4):
         """
         智能体
         :param state_dim: 状态空间维度
@@ -21,6 +21,10 @@ class AgentOcp:
         # 获取环境动作信息
         self.env_acceleration_range = env.unwrapped.config["action"]['acceleration_range']
         self.env_steering_range = env.unwrapped.config["action"]['steering_range']
+
+        # 获取缓冲区最大数量
+        self.buffer_size = self.config.train.buffer_size
+
 
         self.advantage = None
         self.state_dim = state_dim
@@ -47,9 +51,9 @@ class AgentOcp:
         self.memory = []
 
         # 惩罚放大系数
-        self.penalty = 1.0
+        self.penalty = 1000.0
         self.penalty_amplifier = 1.1
-        self.penalty_max = 20
+        self.penalty_max = 1000
 
         # 正定矩阵
         self.Q_matrix = np.diag([0.04, 0.04, 0.01, 0.01, 0.1, 0.02])
@@ -65,6 +69,9 @@ class AgentOcp:
     # 存储记录
     def store_transition(self, state_info):
         self.memory.append(state_info)
+        if len(self.memory) > self.buffer_size:
+            self.memory.pop(0)
+
 
     def store_len(self):
         return len(self.memory)

@@ -20,8 +20,8 @@ obs, _ = env.reset()
 all_state = get_kinematics_state_current(obs, env)
 state = all_state['state']
 agent = AgentOcp(env, state_dim=len(state))
-agent.actor_model.train()
-agent.critic_model.train()
+agent.actor_model.eval()
+agent.critic_model.eval()
 # 读取参数
 checkpoint_actor = load_checkpoint(agent.actor_model,
                                   f'{checkpoint_dir}/20251231/ac-actor_highway-v0_195500.pth',
