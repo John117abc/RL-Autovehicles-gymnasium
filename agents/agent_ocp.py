@@ -21,6 +21,12 @@ class AgentOcp:
         # 获取环境动作信息
         self.env_acceleration_range = env.unwrapped.config["action"]['acceleration_range']
         self.env_steering_range = env.unwrapped.config["action"]['steering_range']
+        # 周车观察数量
+        self.other_car_count = env.unwrapped.config["observation"]["vehicles_count"] - 1
+        # 与周车的最小距离
+        self.other_car_min_distance = 2.0
+        # 与道路边缘的最小距离
+        self.road_min_distance = 1.0
 
         # 获取缓冲区最大数量
         self.buffer_size = self.config.train.buffer_size
@@ -51,9 +57,9 @@ class AgentOcp:
         self.memory = []
 
         # 惩罚放大系数
-        self.penalty = 1000.0
-        self.penalty_amplifier = 1.1
-        self.penalty_max = 1000
+        self.penalty = 1.0
+        self.penalty_amplifier = 1.01
+        self.penalty_max = 100
 
         # 正定矩阵
         self.Q_matrix = np.diag([0.04, 0.04, 0.01, 0.01, 0.1, 0.02])
@@ -135,6 +141,7 @@ class AgentOcp:
         # 转为tensor
         state_x_refs = torch.from_numpy(np.array([[s['state_x_ref'] for s in states]])).squeeze(0).to(self.device).float()
         state_ego = torch.from_numpy(np.array([[s['state_ego'] for s in states]])).squeeze(0).to(self.device).float()
+        state_other = torch.from_numpy(np.array([[s['state_other'] for s in states]])).squeeze(0).to(self.device).float()
         state_all_np = np.array([[s['state'] for s in states]]).squeeze(0)
         x_roads = torch.from_numpy(np.array([[s['x_road'] for s in states]])).squeeze(0).to(self.device).float()
         Q_matrix_tensor = torch.from_numpy(self.Q_matrix).to(self.device).float()
@@ -148,10 +155,10 @@ class AgentOcp:
         l_actor = torch.mean(tracking_error) + torch.mean(control_energy)
 
         # 周车约束
-        ge_car = torch.max(torch.tensor(0.0),(state_ego - state_x_refs) @ M_matrix_tensor * (state_ego - state_x_refs))
+        ge_car = torch.relu(-torch.sum((((state_ego.unsqueeze(1) - state_other) @ M_matrix_tensor * (state_ego.unsqueeze(1) - state_other)).reshape(self.batch_size * self.other_car_count,6)**2) - self.other_car_min_distance**2,dim=1))
         # 道路约束
-        ge_road = torch.max(torch.tensor(0.0), (state_ego - x_roads) @ M_matrix_tensor * (state_ego - x_roads))
-        constraint = self.penalty * torch.mean(ge_car + ge_road)
+        ge_road = torch.relu(-(torch.sum(((state_ego - x_roads) @ M_matrix_tensor * (state_ego - x_roads))**2, dim=1) - self.road_min_distance**2))
+        constraint = self.penalty * torch.mean(ge_car) + torch.mean(ge_road)
 
         loss_actor = l_actor + constraint
         self.actor_optimizer.zero_grad()

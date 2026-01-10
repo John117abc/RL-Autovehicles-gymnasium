@@ -155,7 +155,7 @@ def _save_model(agent, config, metrics, extra_info_actor, extra_info_critic, log
 
     checkpoint.save_checkpoint(
         model=agent.actor_model,
-        model_name='ac-actor',
+        model_name='ac-actor-obs6-v2.0',
         optimizer=agent.actor_optimizer,
         extra_info=extra_info_actor,
         metrics=metrics,
@@ -164,7 +164,7 @@ def _save_model(agent, config, metrics, extra_info_actor, extra_info_critic, log
 
     checkpoint.save_checkpoint(
         model=agent.critic_model,
-        model_name='ac-critic',
+        model_name='ac-critic-obs6-v2.0',
         optimizer=agent.critic_optimizer,
         extra_info=extra_info_critic,
         metrics=metrics,
@@ -179,7 +179,7 @@ def _save_model(agent, config, metrics, extra_info_actor, extra_info_critic, log
 
 
 if __name__ == "__main__":
-    checkpoint_pth = {'actor':'20260105/ac-actor_highway-v0_213949_max_avg_reward=0.9019502401351929_episode=1009.pth',
-                      'critic':'20260105/ac-critic_highway-v0_213949_max_avg_reward=0.9019502401351929_episode=1009.pth'}
-    # checkpoint_pth = None
+    # checkpoint_pth = {'actor':'20260106/ac-actor-obs6_highway-v0_144917.pth',
+    #                   'critic':'20260106/ac-critic-obs6_highway-v0_144917.pth'}
+    checkpoint_pth = None
     train_agent(check_point_path = checkpoint_pth)

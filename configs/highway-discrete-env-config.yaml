@@ -8,9 +8,9 @@
             "lateral": True,        # 启用转向控制
             "dynamical": False,      # 是否模拟动力学（例如摩擦力）而非运动学
         },
-        "vehicles_density":3.0,
+        "vehicles_density":2.0,
         "lanes_count": 4,   # 车道数
-        "vehicles_count": 50,   # 车辆数
+        "vehicles_count": 40,   # 车辆数
         "duration": 200,  # [s]  # 时间s
         "initial_spacing": 1.0,   # 初始间距
         "collision_reward": -1000,  # 碰撞奖励

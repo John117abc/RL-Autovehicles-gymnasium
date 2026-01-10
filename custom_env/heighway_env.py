@@ -19,7 +19,7 @@ def get_highway_discrete_env():
                 "vy": [-20, 20]
             },
             'normalize':False,
-            "vehicles_count": 5,
+            "vehicles_count": 7,
             "absolute": True,
             "order": "sorted"
         }

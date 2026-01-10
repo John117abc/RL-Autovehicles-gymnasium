@@ -12,7 +12,6 @@ config = load_config('configs/default.yaml')
 checkpoint_dir = config.checkpoints
 # 初始化环境
 env = get_highway_discrete_env()
-action_dim = 2
 
 # 初始化智能体
 logger.info('开始初始化智能体')
@@ -24,12 +23,12 @@ agent.actor_model.eval()
 agent.critic_model.eval()
 # 读取参数
 checkpoint_actor = load_checkpoint(agent.actor_model,
-                                  f'{checkpoint_dir}/20251231/ac-actor_highway-v0_195500.pth',
+                                  f'{checkpoint_dir}/20260106/ac-actor_highway-v0_171409.pth',
                                   agent.actor_optimizer,
                                   agent.device)
 
 checkpoint_critic = load_checkpoint(agent.critic_model,
-                                  f'{checkpoint_dir}/20251231/ac-critic_highway-v0_195501.pth',
+                                  f'{checkpoint_dir}/20260106/ac-critic_highway-v0_171410.pth',
                                   agent.critic_optimizer,
                                   agent.device)
 
