@@ -14,7 +14,9 @@ from .agent_utils import (get_three_lane_paths,
                           get_kinematics_state_current,
                           get_complete_lane_references,
                           calculate_state_error,
-                          get_kinematics_state_static)
+                          get_kinematics_state_static,
+                          get_one_lane_references,
+                          get_now_lane)
 __all__ = ['get_logger',
            'save_checkpoint',
            'load_config',
@@ -34,4 +36,6 @@ __all__ = ['get_logger',
            'calculate_state_error',
            'get_project_root',
            'get_kinematics_state_static',
-           'compute_reward_IDC']
+           'compute_reward_IDC',
+           'get_one_lane_references',
+           'get_now_lane']

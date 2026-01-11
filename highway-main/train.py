@@ -4,7 +4,7 @@ from custom_env import get_highway_discrete_env
 from utils import (
     checkpoint, load_config, get_kinematics_state_current,
     get_kinematics_state_static, get_logger,
-    get_complete_lane_references, compute_reward_IDC,load_checkpoint
+    get_complete_lane_references, compute_reward_IDC,load_checkpoint,get_one_lane_references,get_now_lane
 )
 
 
@@ -58,7 +58,8 @@ def train_agent(check_point_path = None):
         obs, _ = env.reset()
         done = False
         step_count = 0
-        path = get_complete_lane_references(env, horizon=20)[1]
+        route, lane_id, current_lane_idx = get_now_lane(env)
+        path = get_one_lane_references(env,route, lane_id, current_lane_idx, horizon=20)
         state = get_kinematics_state_static(env, obs, path)
 
         loss_critic_one_eps = []
@@ -67,7 +68,7 @@ def train_agent(check_point_path = None):
 
         while not done and step_count < max_step:
             env.render()
-            path = get_complete_lane_references(env, horizon=20)[1]
+            path = get_one_lane_references(env,route, lane_id, current_lane_idx, horizon=20)
 
             action = agent.select_action(state['state'])
             agent.store_transition([state, action])
@@ -179,7 +180,7 @@ def _save_model(agent, config, metrics, extra_info_actor, extra_info_critic, log
 
 
 if __name__ == "__main__":
-    # checkpoint_pth = {'actor':'20260106/ac-actor-obs6_highway-v0_144917.pth',
-    #                   'critic':'20260106/ac-critic-obs6_highway-v0_144917.pth'}
-    checkpoint_pth = None
+    checkpoint_pth = {'actor':'20260111/ac-actor-obs6-v2.0_highway-v0_155045.pth',
+                      'critic':'20260111/ac-critic-obs6-v2.0_highway-v0_155046.pth'}
+    # checkpoint_pth = None
     train_agent(check_point_path = checkpoint_pth)

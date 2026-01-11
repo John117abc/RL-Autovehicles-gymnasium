@@ -6,6 +6,69 @@ from datetime import datetime
 from utils import get_logger
 
 
+def save_checkpoints(
+        model,
+        model_name: str,
+        env_name: str,
+        file_dir: str = "checkpoints",
+        metrics: dict = None,
+        extension: str = "pth",
+        optimizer=None,
+        extra_info=None
+):
+    from utils import get_project_root
+    """
+    保存模型检查点，自动按日期创建子文件夹（如 checkpoints/20251223/...）
+
+    Args:
+        model: 要保存的模型（nn.Module）
+        model_name: 模型名称，如 'ppo', 'dqn'
+        env_name: 环境名称，如 'highway-v0'
+        file_dir: 基础保存目录，如 "checkpoints"
+        metrics: 性能指标，如 {'reward': 234.5}
+        extension: 文件扩展名，默认 'pth'
+        optimizer: 可选，优化器状态
+        epoch: 当前 epoch
+        extra_info: 其他自定义信息
+    """
+    # 获取根目录信息
+    file_dir = get_project_root() / file_dir
+
+    # 1. 获取当前日期和时间
+    today = datetime.now().strftime("%Y%m%d")  # 20251223
+    time_now = datetime.now().strftime("%H%M%S")  # 145723
+
+    # 2. 构建日期子目录路径
+    dated_dir = os.path.join(file_dir, today)
+    os.makedirs(dated_dir, exist_ok=True)
+
+    # 3. 构建文件名（不含路径）
+    base_name = f"{model_name}_{env_name}_{time_now}"
+    if metrics:
+        metric_strs = []
+        for k, v in metrics.items():
+            if isinstance(v, float):
+                metric_strs.append(f"{k}={v:.1f}")
+            else:
+                metric_strs.append(f"{k}={v}")
+        base_name += "_" + "_".join(metric_strs)
+
+    file_name = f"{base_name}.{extension}"
+    file_path = os.path.join(dated_dir, file_name)
+
+    # 4. 构建 checkpoint 字典
+    checkpoint = {
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict() if optimizer else None,
+    }
+    if extra_info:
+        clean_info = to_serializable(extra_info)
+        checkpoint.update(clean_info)
+
+    # 5. 保存
+    torch.save(checkpoint, file_path)
+    get_logger().info(f'训练文件保存在：{file_path}')
+
 
 def save_checkpoint(
         model,

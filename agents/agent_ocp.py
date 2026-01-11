@@ -7,7 +7,7 @@ from random import sample
 
 class AgentOcp:
     def __init__(self,env,state_dim,
-                 hidden_dim = 256,action_dim = 2,actor_lr = 1e-3,critic_lr = 1e-4):
+                 hidden_dim = 256,action_dim = 2,actor_lr = 1e-4,critic_lr = 1e-4):
         """
         智能体
         :param state_dim: 状态空间维度
@@ -158,7 +158,7 @@ class AgentOcp:
         ge_car = torch.relu(-torch.sum((((state_ego.unsqueeze(1) - state_other) @ M_matrix_tensor * (state_ego.unsqueeze(1) - state_other)).reshape(self.batch_size * self.other_car_count,6)**2) - self.other_car_min_distance**2,dim=1))
         # 道路约束
         ge_road = torch.relu(-(torch.sum(((state_ego - x_roads) @ M_matrix_tensor * (state_ego - x_roads))**2, dim=1) - self.road_min_distance**2))
-        constraint = self.penalty * torch.mean(ge_car) + torch.mean(ge_road)
+        constraint = self.penalty * (torch.mean(ge_car) + torch.mean(ge_road))
 
         loss_actor = l_actor + constraint
         self.actor_optimizer.zero_grad()

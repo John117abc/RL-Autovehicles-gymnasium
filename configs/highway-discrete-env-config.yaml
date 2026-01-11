@@ -3,16 +3,16 @@
             "type": "ContinuousAction", # 线性动作
             "acceleration_range": [0, 1.0],       # 纵向加速度范围 (m/s²)
             "steering_range": [-0.785, 0.785],     # 转向角范围 (弧度，约 ±45°)
-            "speed_range":[18.0,20.0],       # 可达速度范围 [m/s]
+            "speed_range":[-0.5,20.0],       # 可达速度范围 [m/s]
             "longitudinal": True,       # 启用油门控制
             "lateral": True,        # 启用转向控制
             "dynamical": False,      # 是否模拟动力学（例如摩擦力）而非运动学
         },
-        "vehicles_density":2.0,
+        "vehicles_density":3.0,
         "lanes_count": 4,   # 车道数
-        "vehicles_count": 40,   # 车辆数
+        "vehicles_count": 50,   # 车辆数
         "duration": 200,  # [s]  # 时间s
-        "initial_spacing": 1.0,   # 初始间距
+        "initial_spacing": 5.0,   # 初始间距
         "collision_reward": -1000,  # 碰撞奖励
         "reward_speed_range": [10, 20],  # [m/s] 从这个范围到最高速度的奖励呈线性关系 [0, HighwayEnv.HIGH_SPEED_REWARD].
         "simulation_frequency": 15,  # [Hz] 模拟频率

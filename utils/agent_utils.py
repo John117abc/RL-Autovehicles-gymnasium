@@ -145,6 +145,22 @@ def calculate_state_error(obs, reference):
     return np.array([delta_p, delta_phi, delta_v]),np.array([nearest_ref_point[0],nearest_ref_point[1],ref_speed,0.0,ref_heading,0])
 
 
+def get_now_lane(env):
+    """
+    获取自车车道信息
+    :param env: 环境
+    :return:
+    """
+    ego = env.unwrapped.vehicle
+
+    # 获取当前车道信息
+    current_index = ego.lane_index
+    route, lane_id = current_index[0], current_index[1]
+    current_lane_idx = current_index[2]
+
+    return route,lane_id,current_lane_idx
+
+
 def get_complete_lane_references(env, horizon=50, longitudinal_step=1.0):
     """
     获取 highway-env 中三条车道的完整参考信息
@@ -153,9 +169,7 @@ def get_complete_lane_references(env, horizon=50, longitudinal_step=1.0):
     road = env.unwrapped.road
 
     # 获取当前车道信息
-    current_index = ego.lane_index
-    route, lane_id = current_index[0], current_index[1]
-    current_lane_idx = current_index[2]
+    route,lane_id,current_lane_idx = get_now_lane(env)
 
     # 获取总车道数
     total_lanes = len(road.network.graph[route][lane_id])
@@ -205,6 +219,54 @@ def get_complete_lane_references(env, horizon=50, longitudinal_step=1.0):
 
     return references
 
+def get_one_lane_references(env,route, lane_id, lane_idx,horizon=50, longitudinal_step=1.0):
+    """
+    获取 highway-env 当前车道的静态路径信息
+    """
+    ego = env.unwrapped.vehicle
+    road = env.unwrapped.road
+
+    # 获取当前车道信息
+    route, lane_id, lane_idx = get_now_lane(env)
+
+    # 定义行为类型
+    behavior_types = ["change_to_left", "lane_keep", "change_to_right"]
+
+    ref = {
+        'valid': False,
+        'positions': np.full((horizon, 2), np.nan),
+        'headings': np.full(horizon, np.nan),
+        'velocities': np.full(horizon, np.nan),
+        'behavior': 'lane_keep',
+        'lane_index': None
+    }
+
+    # 检查车道是否存在
+    lane_index = (route, lane_id, lane_idx)
+    lane = road.network.get_lane(lane_index)
+    ref['valid'] = True
+    ref['lane_index'] = lane_index
+
+    # 采样位置和航向角
+    positions = []
+    headings = []
+    s0 = ego.position[0]  # 当前纵向位置
+
+    for j in range(horizon):
+        s = s0 + j * longitudinal_step
+        positions.append(lane.position(s, 0.0))  # 车道中心线
+        headings.append(lane.heading_at(s))
+
+    ref['positions'] = np.array(positions)
+    ref['headings'] = np.array(headings)
+
+    # 生成速度剖面
+    ref['velocities'] = generate_velocity_profile(
+        env, lane_index, s0, horizon, longitudinal_step, behavior_types
+    )
+
+    return ref
+
 
 def generate_velocity_profile(env, lane_index, s_start, horizon=50, step=5.0, behavior_type="lane_keep"):
     """
@@ -224,6 +286,9 @@ def generate_velocity_profile(env, lane_index, s_start, horizon=50, step=5.0, be
     ego_vehicle = env.unwrapped.vehicle
     road = env.unwrapped.road
     lane = road.network.get_lane(lane_index)
+
+    config = env.unwrapped.config
+    max_v = config.get("action")["speed_range"][1]
 
     velocity_profile = []
 
@@ -259,7 +324,7 @@ def generate_velocity_profile(env, lane_index, s_start, horizon=50, step=5.0, be
                 final_speed = max(final_speed, min_possible_speed)
 
         # 6. 确保速度在合理范围内
-        final_speed = np.clip(final_speed, 0.0, env.unwrapped.config.get("speed_limit", 30.0))
+        final_speed = np.clip(final_speed, 0.0, env.unwrapped.config.get("speed_limit", max_v))
 
         velocity_profile.append(final_speed)
 
@@ -337,10 +402,11 @@ def calculate_base_speed(env, lane_index, s_position, horizon_points=10):
     """
     road = env.unwrapped.road
     lane = road.network.get_lane(lane_index)
-
     # 1. 获取环境配置的速度限制
     config = env.unwrapped.config
-    default_speed_limit = config.get("speed_limit", 30)  # 默认30 m/s
+    max_v = config.get("action")["speed_range"][1]
+
+    default_speed_limit = max_v  # 默认30 m/s
 
     # 2. 考虑前方道路曲率
     min_safe_speed = float('inf')
@@ -363,7 +429,7 @@ def calculate_base_speed(env, lane_index, s_position, horizon_points=10):
     if "roundabout" in str(lane_index[0]).lower():
         base_speed *= 0.7
 
-    return np.clip(base_speed, 5.0, 30.0)  # 限制在合理范围
+    return np.clip(base_speed, config.get("action")["speed_range"][0], config.get("action")["speed_range"][1])  # 限制在合理范围
 
 
 def calculate_traffic_speed(env, ego_vehicle, lane_index, s_position, lookahead_distance=50.0):
@@ -385,7 +451,7 @@ def calculate_traffic_speed(env, ego_vehicle, lane_index, s_position, lookahead_
 
     # 1. IDM (Intelligent Driver Model) 参数
     desired_time_headway = 1.5  # 期望时距 (秒)
-    safe_distance = 4.0  # 最小安全距离 (米)
+    safe_distance = 2  # 最小安全距离 (米)
     max_acceleration = 2.0  # 最大加速度 (m/s²)
     comfortable_braking = 3.0  # 舒适制动减速度 (m/s²)
 
@@ -560,8 +626,8 @@ def get_kinematics_ego(obs, out=None):
     # 按顺序填充：x, y, vy, vx, heading, yaw_rate
     out[0] = ego[1]  # x
     out[1] = ego[2]  # y
-    out[2] = ego[4]  # vy
-    out[3] = ego[3]  # vx
+    out[2] = ego[3]  # 横向速度
+    out[3] = ego[4]  # 纵向速度
     out[4] = ego[5]  # heading
     out[5] = ego[8]  # yaw_rate
 
@@ -575,8 +641,8 @@ def get_kinematics_surround(obs, out=None):
         out = np.empty((M, 6), dtype=s.dtype)
     out[:, 0] = s[:, 1]      # x
     out[:, 1] = s[:, 2]      # y
-    out[:, 2] = s[:, 4]      # vy
-    out[:, 3] = 0            # vx
+    out[:, 2] = s[:, 3]      # 纵向速度
+    out[:, 4] = 0            # 横向速度
     out[:, 4] = s[:, 5]      # heading
     out[:, 5] = 0            # yaw_rate
     return out
